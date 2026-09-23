@@ -18,6 +18,8 @@ function blendPower(raw, previous, games, k) {
   if (raw === null || raw === undefined) raw = previous;
   return k > 0 ? (games * raw + k * previous) / (games + k) : raw;
 }
+// the PowerScore the model uses: this season's once games are played, blended with (or, before any games, equal to) last season's
+const currentPower = (t) => blendPower(t.powerRaw, t.powerPrev, t.gamesPlayed, M.k);
 function teamInputs(code, goalieId, rest, out) {
   const t = teams[code];
   const goalies = D.goalies[code] || [];
@@ -232,16 +234,16 @@ function sparkline(values, lo, hi) {
   return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts.map((p) => p.map((n) => n.toFixed(1)).join(",")).join(" ")}"/><circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="2.4"/></svg>`;
 }
 function renderRankings() {
-  const rows = [...D.teams].sort((a, b) => b.powerRaw - a.powerRaw);
-  const max = rows[0].powerRaw, min = rows[rows.length - 1].powerRaw;
+  const rows = [...D.teams].sort((a, b) => currentPower(b) - currentPower(a));
+  const max = currentPower(rows[0]), min = currentPower(rows[rows.length - 1]);
   // rank 10 games ago, from each team's PowerScore going into its 10th-to-last game
-  const earlier = D.teams.map((t) => { const tr = D.trends[t.team] || []; return [t.team, tr.length > 10 ? tr[tr.length - 10][1] : t.powerRaw]; })
+  const earlier = D.teams.map((t) => { const tr = D.trends[t.team] || []; return [t.team, tr.length > 10 ? tr[tr.length - 10][1] : currentPower(t)]; })
     .sort((a, b) => b[1] - a[1]).map(([code]) => code);
   table($("teamTable"), [
-    { label: "Rank", value: (t, i) => { const d = earlier.indexOf(t.team) - i;
+    { label: "Rank", value: (t, i) => { const d = D.preseason ? 0 : earlier.indexOf(t.team) - i;
       return `<span class="rkn">${i + 1}</span><span class="mv ${d > 0 ? "up" : d < 0 ? "down" : "same"}">${d > 0 ? "▲ " + d : d < 0 ? "▼ " + -d : "–"}</span>`; } },
     { label: "Team", value: (t) => `<div class="who"><b>${t.team}</b><span>${t.record.join("-")} ${D.preseason ? seasonLabel(D.dataSeason) : "W-L-SO"}</span></div>` },
-    { label: "PowerScore", value: (t) => `<div class="score"><strong>${fix(t.powerRaw)}</strong><span class="track"><i style="width:${(8 + 92 * (t.powerRaw - min) / (max - min)).toFixed(1)}%"></i></span></div>` },
+    { label: "PowerScore", value: (t) => `<div class="score"><strong>${fix(currentPower(t))}</strong><span class="track"><i style="width:${(8 + 92 * (currentPower(t) - min) / (max - min)).toFixed(1)}%"></i></span></div>` },
     { label: "Season trend", value: (t) => sparkline((D.trends[t.team] || []).map((x) => x[1]), 0.3, 0.9) },
     { label: "Elo", num: true, value: (t) => `<span class="stat2">${fix(t.elo, 0)}</span>` },
     { label: "Recent xG%", num: true, value: (t) => `<span class="stat2">${pct(t.form_xGoalsFor / (t.form_xGoalsFor + t.form_xGoalsAgainst), 1)}</span>` },
@@ -264,7 +266,8 @@ function setRankView(view) {
   $("playerRank").hidden = view !== "players";
   $("rankTitle").textContent = view === "teams" ? "Team power rankings" : "Player power rankings";
   $("rankNote").textContent = view === "teams"
-    ? `PowerScore is your team model's predicted points % from ${seasonLabel(D.dataSeason)} stats. Arrows show movement over the last 10 games. Click a team for details.`
+    ? (D.preseason ? `Preseason: PowerScore is each team's final ${seasonLabel(D.dataSeason)} PowerScore (your team model's predicted points %) until games are played. Click a team for details.`
+      : `PowerScore is your team model's predicted points % from ${seasonLabel(D.season)} stats, blended with last season's early on. Arrows show movement over the last 10 games. Click a team for details.`)
     : `Rating is your player model (predicted GAR per 82 games) on each player's recent stats, the value the game model uses. Season PS is your ${seasonLabel(D.rankingsSeason)} PowerScore ranking.`;
 }
 $("segTeams").addEventListener("click", () => setRankView("teams"));
@@ -452,7 +455,7 @@ $("asOf").textContent = D.preseason ? `${seasonLabel(D.season)} preseason · rat
 document.querySelectorAll("[data-backtest-season]").forEach((el) => (el.textContent = el.dataset.backtestSeason.replace("{s}", seasonLabel(D.backtestSeason))));
 if (D.preseason) $("preseasonNote").hidden = false;
 const teamOptions = (selected) => codes.map((c) => `<option ${c === selected ? "selected" : ""}>${c}</option>`).join("");
-const byPower = [...D.teams].sort((a, b) => b.powerRaw - a.powerRaw);
+const byPower = [...D.teams].sort((a, b) => currentPower(b) - currentPower(a));
 $("home").innerHTML = teamOptions(byPower[0].team);
 $("away").innerHTML = teamOptions(byPower[1].team);
 $("teamSelect").innerHTML = teamOptions(byPower[0].team);

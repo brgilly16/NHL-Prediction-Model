@@ -42,6 +42,9 @@ jobs:
           restore-keys: moneypuck-
       - name: Update data and model
         run: python -m src.gamemodel.run --daily
+        env:
+          # show progress lines as they happen instead of all at the end
+          PYTHONUNBUFFERED: "1"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
