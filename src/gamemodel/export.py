@@ -1,4 +1,6 @@
+import re
 import json
+import time as clock
 import pickle
 import numpy as np
 import pandas as pd
@@ -91,6 +93,10 @@ def exportSite():
     }
     with open(OUTPUT, "w", encoding="utf-8") as f:
         f.write("window.NHL_DATA = " + json.dumps(clean(data), separators=(",", ":")) + ";\n")
+    # stamp a version on the script links so browsers load the new files right after an update instead of a cached copy
+    page = open("webapp/index.html", encoding="utf-8").read()
+    page = re.sub(r'src="(data|app)\.js(\?v=\d+)?"', lambda m: f'src="{m.group(1)}.js?v={int(clock.time())}"', page)
+    open("webapp/index.html", "w", encoding="utf-8").write(page)
     print("Wrote", OUTPUT)
 if __name__ == "__main__":
     exportSite()
