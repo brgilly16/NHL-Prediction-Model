@@ -1,0 +1,446 @@
+{
+  "baselines": [
+    {
+      "model": "Always home ice rate",
+      "logLoss": 0.6902393007571207,
+      "accuracy": 0.5418661455788959,
+      "brier": 0.23006636508970343
+    },
+    {
+      "model": "Elo only",
+      "logLoss": 0.6690475478535816,
+      "accuracy": 0.5906204201270151,
+      "brier": 0.219751580313069
+    },
+    {
+      "model": "PowerScore only",
+      "logLoss": 0.6717483300531594,
+      "accuracy": 0.5925744992672203,
+      "brier": 0.22102359245831274
+    }
+  ],
+  "candidates": [
+    {
+      "model": "{\"elo\": \"raw\"}",
+      "logLoss": 0.6650714836093063,
+      "accuracy": 0.6001954079140205,
+      "brier": 0.21786179270305395,
+      "goalDeviance": 1.0754385436579943,
+      "goalMAE": 1.3724738689111808,
+      "params": {
+        "elo": "raw"
+      }
+    },
+    {
+      "model": "{\"elo\": \"none\"}",
+      "logLoss": 0.6664940832745171,
+      "accuracy": 0.6027357107962873,
+      "brier": 0.2185143293203672,
+      "goalDeviance": 1.0766449931186508,
+      "goalMAE": 1.3730689334782575,
+      "params": {
+        "elo": "none"
+      }
+    },
+    {
+      "model": "{\"elo\": \"residual\"}",
+      "logLoss": 0.6650771646231509,
+      "accuracy": 0.6001954079140205,
+      "brier": 0.21786445622885103,
+      "goalDeviance": 1.0754390022817988,
+      "goalMAE": 1.3724719250068365,
+      "params": {
+        "elo": "residual"
+      }
+    },
+    {
+      "model": "{\"k\": 0}",
+      "logLoss": 0.665169144372441,
+      "accuracy": 0.6014655593551539,
+      "brier": 0.21790418917045773,
+      "goalDeviance": 1.0756979312158337,
+      "goalMAE": 1.3728025917252955,
+      "params": {
+        "k": 0
+      }
+    },
+    {
+      "model": "{\"k\": 20}",
+      "logLoss": 0.6651209030615768,
+      "accuracy": 0.5995114802149487,
+      "brier": 0.21788398606836384,
+      "goalDeviance": 1.075504447780765,
+      "goalMAE": 1.3724849270395858,
+      "params": {
+        "k": 20
+      }
+    },
+    {
+      "model": "{\"blend\": 1.0}",
+      "logLoss": 0.6651766111242761,
+      "accuracy": 0.6002931118710307,
+      "brier": 0.21791749126641333,
+      "goalDeviance": 1.0754390022817988,
+      "goalMAE": 1.3724719250068365,
+      "params": {
+        "blend": 1.0
+      }
+    },
+    {
+      "model": "{\"blend\": 0.0}",
+      "logLoss": 0.6654541171735443,
+      "accuracy": 0.6000977039570102,
+      "brier": 0.2180363038247665,
+      "goalDeviance": 1.0754390022817988,
+      "goalMAE": 1.3724719250068365,
+      "params": {
+        "blend": 0.0
+      }
+    },
+    {
+      "model": "{\"alpha\": 0.01, \"C\": 0.01}",
+      "logLoss": 0.6651299320552041,
+      "accuracy": 0.6010747435271129,
+      "brier": 0.21788800786754622,
+      "goalDeviance": 1.0753984752358408,
+      "goalMAE": 1.372416852478172,
+      "params": {
+        "alpha": 0.01,
+        "C": 0.01
+      }
+    },
+    {
+      "model": "{\"goalModel\": \"hgb\"}",
+      "logLoss": 0.6659907906720449,
+      "accuracy": 0.6034196384953591,
+      "brier": 0.21828786422100188,
+      "goalDeviance": 1.0792123702991774,
+      "goalMAE": 1.3723253243544566,
+      "params": {
+        "goalModel": "hgb"
+      }
+    },
+    {
+      "model": "{\"players\": \"missing\"}",
+      "logLoss": 0.6650391120766069,
+      "accuracy": 0.6043966780654616,
+      "brier": 0.21784604576729052,
+      "goalDeviance": 1.0752605113604206,
+      "goalMAE": 1.372556777506833,
+      "params": {
+        "players": "missing"
+      }
+    },
+    {
+      "model": "{\"players\": \"lineup\"}",
+      "logLoss": 0.6646882774358811,
+      "accuracy": 0.6009770395701026,
+      "brier": 0.217691224888739,
+      "goalDeviance": 1.0745794290491504,
+      "goalMAE": 1.3719248826824977,
+      "params": {
+        "players": "lineup"
+      }
+    },
+    {
+      "model": "{\"players\": \"both\"}",
+      "logLoss": 0.6647956188903835,
+      "accuracy": 0.6029311187103078,
+      "brier": 0.21773733087661196,
+      "goalDeviance": 1.074719722783569,
+      "goalMAE": 1.372160852913463,
+      "params": {
+        "players": "both"
+      }
+    },
+    {
+      "model": "{\"players\": \"lineup\", \"form\": 5}",
+      "logLoss": 0.6648954712332206,
+      "accuracy": 0.5993160723009282,
+      "brier": 0.2177975692969878,
+      "goalDeviance": 1.075579626232328,
+      "goalMAE": 1.3719759882895575,
+      "params": {
+        "players": "lineup",
+        "form": 5
+      }
+    },
+    {
+      "model": "{\"players\": \"lineup\", \"form\": 20}",
+      "logLoss": 0.6648659461126906,
+      "accuracy": 0.6022471910112359,
+      "brier": 0.21776047285648237,
+      "goalDeviance": 1.0737668352012537,
+      "goalMAE": 1.3715466492213186,
+      "params": {
+        "players": "lineup",
+        "form": 20
+      }
+    },
+    {
+      "model": "{\"players\": \"lineup\", \"extras\": [\"adj\"]}",
+      "logLoss": 0.6647498720785673,
+      "accuracy": 0.5988275525158769,
+      "brier": 0.2177188432829694,
+      "goalDeviance": 1.0746167539733433,
+      "goalMAE": 1.3718150549219081,
+      "params": {
+        "players": "lineup",
+        "extras": [
+          "adj"
+        ]
+      }
+    },
+    {
+      "model": "{\"players\": \"lineup\", \"extras\": [\"ev\"]}",
+      "logLoss": 0.6641041278498103,
+      "accuracy": 0.6036150464093796,
+      "brier": 0.21741359175225006,
+      "goalDeviance": 1.073043912616513,
+      "goalMAE": 1.369859234234283,
+      "params": {
+        "players": "lineup",
+        "extras": [
+          "ev"
+        ]
+      }
+    },
+    {
+      "model": "{\"players\": \"lineup\", \"extras\": [\"st\"]}",
+      "logLoss": 0.6646526928240671,
+      "accuracy": 0.6000977039570102,
+      "brier": 0.21766800867827396,
+      "goalDeviance": 1.0737186442759865,
+      "goalMAE": 1.3715905326898217,
+      "params": {
+        "players": "lineup",
+        "extras": [
+          "st"
+        ]
+      }
+    },
+    {
+      "model": "{\"players\": \"lineup\", \"extras\": [\"travel\"]}",
+      "logLoss": 0.6647900311554181,
+      "accuracy": 0.6001954079140205,
+      "brier": 0.21773862366368674,
+      "goalDeviance": 1.0747854935508925,
+      "goalMAE": 1.3720415084179012,
+      "params": {
+        "players": "lineup",
+        "extras": [
+          "travel"
+        ]
+      }
+    },
+    {
+      "model": "{\"players\": \"lineup\", \"extras\": [\"ev\", \"st\"]}",
+      "logLoss": 0.6642512014461665,
+      "accuracy": 0.6045920859794822,
+      "brier": 0.2174817076174019,
+      "goalDeviance": 1.0730792335830257,
+      "goalMAE": 1.370079375484628,
+      "params": {
+        "players": "lineup",
+        "extras": [
+          "ev",
+          "st"
+        ]
+      }
+    }
+  ],
+  "best": {
+    "players": "lineup",
+    "extras": [
+      "ev"
+    ]
+  },
+  "bestBySeason": [
+    {
+      "model": "season 2017",
+      "logLoss": 0.672601695588155,
+      "accuracy": 0.5916095890410958,
+      "brier": 0.2195643027795788,
+      "goalDeviance": 1.0959648069312578,
+      "goalMAE": 1.3624563376748078,
+      "season": 2017
+    },
+    {
+      "model": "season 2018",
+      "logLoss": 0.6736465121807113,
+      "accuracy": 0.5920608108108109,
+      "brier": 0.22327063840649178,
+      "goalDeviance": 1.1193367729314685,
+      "goalMAE": 1.3860853618057953,
+      "season": 2018
+    },
+    {
+      "model": "season 2019",
+      "logLoss": 0.6784683992758593,
+      "accuracy": 0.5728643216080402,
+      "brier": 0.22276146643625816,
+      "goalDeviance": 1.0253574291873568,
+      "goalMAE": 1.3275047887977232,
+      "season": 2019
+    },
+    {
+      "model": "season 2020",
+      "logLoss": 0.65603195900176,
+      "accuracy": 0.6176836861768369,
+      "brier": 0.2132891030312,
+      "goalDeviance": 1.1136074353197685,
+      "goalMAE": 1.3406209870951535,
+      "season": 2020
+    },
+    {
+      "model": "season 2021",
+      "logLoss": 0.6414866175193661,
+      "accuracy": 0.6545454545454545,
+      "brier": 0.205538395628224,
+      "goalDeviance": 1.0570118269050621,
+      "goalMAE": 1.3692056521798566,
+      "season": 2021
+    },
+    {
+      "model": "season 2022",
+      "logLoss": 0.655453025087206,
+      "accuracy": 0.6269515201314708,
+      "brier": 0.21359078744090532,
+      "goalDeviance": 1.0261228036431507,
+      "goalMAE": 1.3911722656631618,
+      "season": 2022
+    },
+    {
+      "model": "season 2023",
+      "logLoss": 0.6603338621076644,
+      "accuracy": 0.6073170731707317,
+      "brier": 0.21860555992957292,
+      "goalDeviance": 1.091622308605827,
+      "goalMAE": 1.3913942407181412,
+      "season": 2023
+    },
+    {
+      "model": "season 2024",
+      "logLoss": 0.6593968548931534,
+      "accuracy": 0.6145748987854251,
+      "brier": 0.21902165023700068,
+      "goalDeviance": 1.1045124953583485,
+      "goalMAE": 1.384365527973714,
+      "season": 2024
+    },
+    {
+      "model": "season 2025",
+      "logLoss": 0.6798683602797038,
+      "accuracy": 0.5523889354568315,
+      "brier": 0.2208723854862932,
+      "goalDeviance": 1.0313898810317408,
+      "goalMAE": 1.35888408056857,
+      "season": 2025
+    }
+  ],
+  "tiers": [
+    {
+      "tier": "Toss-up",
+      "minConfidence": 0.5,
+      "all": {
+        "games": 3286,
+        "share": 0.3210552027357108,
+        "accuracy": 0.5203895313451005
+      },
+      "latest": {
+        "games": 440,
+        "share": 0.3688181056160939,
+        "accuracy": 0.47045454545454546
+      }
+    },
+    {
+      "tier": "Lean",
+      "minConfidence": 0.55,
+      "all": {
+        "games": 2841,
+        "share": 0.27757694186614557,
+        "accuracy": 0.5969728968673003
+      },
+      "latest": {
+        "games": 348,
+        "share": 0.2917015926236379,
+        "accuracy": 0.5488505747126436
+      }
+    },
+    {
+      "tier": "Solid",
+      "minConfidence": 0.6,
+      "all": {
+        "games": 2016,
+        "share": 0.19697117733268196,
+        "accuracy": 0.6220238095238095
+      },
+      "latest": {
+        "games": 242,
+        "share": 0.20284995808885165,
+        "accuracy": 0.5785123966942148
+      }
+    },
+    {
+      "tier": "Strong",
+      "minConfidence": 0.65,
+      "all": {
+        "games": 2092,
+        "share": 0.20439667806546166,
+        "accuracy": 0.7256214149139579
+      },
+      "latest": {
+        "games": 163,
+        "share": 0.1366303436714166,
+        "accuracy": 0.7423312883435583
+      }
+    }
+  ],
+  "goalCoefficients": {
+    "power": 0.0361,
+    "oppPower": -0.0184,
+    "elo": 0.0143,
+    "oppElo": -0.0153,
+    "logXGF": 0.028,
+    "logXGA": 0.0133,
+    "logGF": 0.0036,
+    "logOppXGF": -0.0062,
+    "logOppXGA": 0.0202,
+    "logOppGA": 0.0034,
+    "goalie": -0.0028,
+    "oppGoalie": -0.0312,
+    "home": 0.0399,
+    "backToBack": -0.0197,
+    "oppBackToBack": 0.0142,
+    "logLeague": 0.0058,
+    "lineupDelta": 0.0204,
+    "oppLineupDelta": -0.0043,
+    "logEvXGF60": 0.0183,
+    "logEvXGA60": -0.0095,
+    "oppLogEvXGF60": -0.0053,
+    "oppLogEvXGA60": 0.0384
+  },
+  "winCoefficients": {
+    "power": 0.1688,
+    "oppPower": -0.1731,
+    "elo": 0.0775,
+    "oppElo": -0.0754,
+    "logXGF": 0.0815,
+    "logXGA": -0.0031,
+    "logGF": -0.0528,
+    "logOppXGF": -0.1007,
+    "logOppXGA": 0.0457,
+    "logOppGA": -0.0713,
+    "goalie": 0.0367,
+    "oppGoalie": -0.0748,
+    "backToBack": -0.0649,
+    "oppBackToBack": 0.0899,
+    "logLeague": 0.0051,
+    "lineupDelta": 0.0352,
+    "oppLineupDelta": -0.0622,
+    "logEvXGF60": 0.0601,
+    "logEvXGA60": -0.1124,
+    "oppLogEvXGF60": -0.0008,
+    "oppLogEvXGA60": 0.0784
+  }
+}

@@ -1,0 +1,5 @@
+*.csv
+__pycache__/
+*.pyc
+# downloaded MoneyPuck data (re-downloaded by python -m src.gamemodel.run)
+data/gamemodel/skaters/
