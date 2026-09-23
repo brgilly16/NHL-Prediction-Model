@@ -26,9 +26,11 @@ def exportSite():
     with open(DATA + "game_model.pkl", "rb") as f:
         model = pickle.load(f)
     features = pd.read_csv(DATA + "features.csv", parse_dates=["date"])
-    season = int(features["season"].max())
-    games = features[features["season"] == season]
+    # dataSeason: latest season with games played; season: the season upcoming games belong to (later than dataSeason in the preseason)
+    dataSeason = int(features["season"].max())
+    games = features[features["season"] == dataSeason]
     teams = pd.read_csv(DATA + "team_state.csv")
+    season = int(teams["season"].max())
     goalies = pd.read_csv(DATA + "goalie_state.csv")
     players = pd.read_csv(DATA + "player_state.csv")
     rankings = pd.read_csv("data/rankings.csv")
@@ -40,6 +42,8 @@ def exportSite():
     playerRankings = rankings[(rankings["category"] == "players") & (rankings["time"] == "regular")]
     playerRankings = playerRankings[playerRankings["season"] == playerRankings["season"].max()]
     seasonScore = playerRankings.set_index(["name", "playerTeam"])["score"].to_dict()
+    # players who changed teams are matched on name alone
+    seasonScoreByName = playerRankings.drop_duplicates("name", keep=False).set_index("name")["score"].to_dict()
     teamRows = []
     for _, t in teams.iterrows():
         record = games[games["team"] == t["team"]]
@@ -54,12 +58,15 @@ def exportSite():
         teamRows.append(row)
     playerRows = {}
     for team, group in players.groupby("team"):
-        group = group.sort_values(["typicalLineup", "rating"], ascending=[False, False])
+        # depth order within forwards and defense (the webpage builds the projected lineup from it)
+        group = group.sort_values(["group", "depth"])
         playerRows[team] = [{"name": p["name"], "position": p["position"], "rating": p["rating"], "typical": bool(p["typicalLineup"]),
-                             "recentGames": int(p["recentGames"]), "seasonScore": seasonScore.get((p["name"], team))}
+                             "group": p["group"], "recentGames": int(p["recentGames"]),
+                             "seasonScore": seasonScore.get((p["name"], team), seasonScoreByName.get(p["name"]))}
                             for _, p in group.iterrows()]
-    goalieRows = {team: group.sort_values(["recentStarts", "starts"], ascending=False)[["goalieId", "name", "starts", "recentStarts", "goalieRating"]].to_dict("records")
-                  for team, group in goalies.groupby("team")}
+    # goalie_state.csv is already ordered with the likely starter first
+    goalieRows = {team: group[["goalieId", "name", "starts", "recentStarts", "goalieRating"]].to_dict("records")
+                  for team, group in goalies.groupby("team", sort=False)}
     trends, recent = {}, {}
     for team, group in games.sort_values("date").groupby("team"):
         trends[team] = [[d.strftime("%Y-%m-%d"), p, e] for d, p, e in zip(group["date"], group["powerRaw"], group["elo"])]
@@ -70,7 +77,10 @@ def exportSite():
     goalColumns = model.features(features.head(2)).columns
     winColumns = model.homeFeatures(features.head(2)).columns
     data = {
-        "season": season, "asOf": str(teams["lastGame"].max())[:10],
+        "season": season, "dataSeason": dataSeason, "preseason": season > dataSeason,
+        "backtestSeason": int(report["bestBySeason"][-1]["season"]),
+        "rankingsSeason": int(playerRankings["season"].max()) if len(playerRankings) else None,
+        "asOf": str(teams["lastGame"].max())[:10],
         "model": {"k": model.k, "blend": model.blend, "eloFit": model.eloFit, "players": model.players,
                   "form": model.form, "extras": list(model.extras), "timeZones": TIME_ZONES,
                   "goal": linear(model.goalScaler, model.goals, goalColumns, model.goals.coef_, model.goals.intercept_),

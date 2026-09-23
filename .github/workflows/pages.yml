@@ -1,8 +1,12 @@
-# publishes the webapp folder (the NHL PowerScore site) to GitHub Pages on every push to main
+# keeps the NHL PowerScore site current: every morning it pulls new games from MoneyPuck, rebuilds the features,
+# refits the model and deploys the webapp folder to GitHub Pages. It also runs on every push and on demand.
 name: Deploy site
 on:
   push:
     branches: [main]
+  schedule:
+    # 11:00 UTC = 6-7 AM Eastern, after the previous night's games are posted
+    - cron: "0 11 * * *"
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,15 +14,34 @@ permissions:
   id-token: write
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # the very first run downloads every career game log (roughly 40 minutes); later runs only fetch new games
+    timeout-minutes: 150
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      # downloaded MoneyPuck data is kept between runs (a new cache entry is saved each run, the newest is restored)
+      - uses: actions/cache@v4
+        with:
+          path: |
+            data/gamemodel/all_teams_raw.csv
+            data/gamemodel/goalie_games.csv
+            data/gamemodel/skaters
+            data/gamemodel/seasons
+          key: moneypuck-${{ github.run_id }}
+          restore-keys: moneypuck-
+      - name: Update data and model
+        run: python -m src.gamemodel.run --daily
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

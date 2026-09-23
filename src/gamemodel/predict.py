@@ -30,15 +30,22 @@ class Predictor:
         self.goalies = pd.read_csv(DATA + "goalie_state.csv")
         self.players = pd.read_csv(DATA + "player_state.csv")
     def teamGoalies(self, team):
-        goalies = self.goalies[self.goalies["team"] == team].sort_values(["recentStarts", "starts"], ascending=False)
+        # goalie_state.csv is already ordered with the likely starter first
+        goalies = self.goalies[self.goalies["team"] == team]
         return goalies[["goalieId", "name", "starts", "recentStarts", "goalieRating"]].to_dict("records")
     def teamPlayers(self, team):
-        players = self.players[self.players["team"] == team].sort_values(["typicalLineup", "rating"], ascending=False)
+        players = self.players[self.players["team"] == team].sort_values(["typicalLineup", "group", "depth"], ascending=[False, True, True])
         return players[["name", "position", "rating", "typicalLineup", "recentGames"]].to_dict("records")
     def playersOut(self, team, names):
-        # a player who is out is replaced by a replacement level player (0 GAR), missing power only counts positive value
-        out = self.players[(self.players["team"] == team) & (self.players["name"].isin(names or []))]["rating"]
-        return float(out.clip(lower=0).sum()), float(-out.sum())
+        # projected lineup: the top 12 forwards and 6 defensemen on the current roster who are not out (next man up fills in)
+        # lineup strength compares it with the team's usual lineup, so offseason additions and losses count too
+        players = self.players[self.players["team"] == team].sort_values(["group", "depth"])
+        out = players["name"].isin(names or [])
+        available = players[~out]
+        dressed = pd.concat([available[available["group"] == "F"].head(12), available[available["group"] == "D"].head(6)])
+        lineupDelta = float(dressed["rating"].sum() - self.teams.loc[team, "lineupTypical"])
+        missing = float(players[out & players["typicalLineup"]]["rating"].clip(lower=0).sum())
+        return missing, lineupDelta
     def teamRow(self, team, opponent, home, goalieId, rest, out):
         state = self.teams.loc[team]
         goalies = self.teamGoalies(team)

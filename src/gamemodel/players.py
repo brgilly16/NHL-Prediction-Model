@@ -115,17 +115,36 @@ def addLineupFeatures(teamGames):
     df["lineupTypical"] = typical.groupby(df["franchise"]).shift(1)
     df["lineupDelta"] = (df["lineupPower"] - df["lineupTypical"]).fillna(0)
     return df, skaters
-def playerState(skaters, teamGames):
-    # each player's current rating and each team's typical lineup (most used skaters over its last 10 games)
-    latest = skaters["season"].max()
-    current = skaters.sort_values("date").groupby("playerId").tail(1)
-    current = current[current["season"] == latest][["playerId", "name", "team", "position", "ratingPost", "date"]]
-    recentGames = teamGames[teamGames["season"] == latest].sort_values("date").groupby("team").tail(10)
+def playerState(skaters, teamGames, season, rosters=None):
+    # each skater's current rating and each team's projected lineup (12 forwards and 6 defensemen)
+    # players are placed on the team from the current NHL roster (so offseason trades and signings count right away);
+    # without a roster a player stays with the team he last played for
+    last = skaters.sort_values("date").groupby("playerId").tail(1).set_index("playerId")
+    current = last[last["season"] >= season - 1][["name", "team", "position", "ratingPost"]].reset_index()
+    if rosters is not None and len(rosters):
+        skaterRoster = rosters[rosters["position"] != "G"]
+        # players not on any fetched roster (unsigned, retired, in the minors) are dropped for the teams that were fetched
+        current = current[~current["team"].isin(skaterRoster["team"].unique()) & ~current["playerId"].isin(skaterRoster["playerId"])]
+        onRoster = skaterRoster.merge(last[["ratingPost"]], left_on="playerId", right_index=True, how="left")
+        # players with no NHL games yet (rookies, signings from other leagues) start at replacement level
+        onRoster["ratingPost"] = onRoster["ratingPost"].fillna(0.0)
+        current = pd.concat([current, onRoster[["playerId", "name", "team", "position", "ratingPost"]]], ignore_index=True)
+    # expected role: average ice time over each player's last 20 games (any team); games in his team's last 10 games
+    history = skaters[skaters["season"] >= season - 1].sort_values("date").groupby("playerId").tail(20)
+    role = history.groupby("playerId")["icetime"].mean().rename("recentIcetime")
+    recentGames = teamGames.sort_values("date").groupby("team").tail(10)
     recent = skaters.merge(recentGames[["gameId", "team"]], on=["gameId", "team"])
-    usage = recent.groupby(["team", "playerId"]).agg(recentGames=("gameId", "count"), recentIcetime=("icetime", "mean")).reset_index()
-    current = current.merge(usage, on=["team", "playerId"], how="left").fillna({"recentGames": 0, "recentIcetime": 0})
-    current = current.sort_values(["team", "recentGames", "recentIcetime"], ascending=[True, False, False])
-    current["typicalLineup"] = current.groupby("team").cumcount() < 18
-    current = current.rename(columns={"ratingPost": "rating"})
+    usage = recent.groupby(["team", "playerId"]).size().rename("recentGames")
+    current = current.join(role, on="playerId").join(usage, on=["team", "playerId"]).fillna({"recentGames": 0, "recentIcetime": 0})
+    current["recentGames"] = current["recentGames"].astype(int)
+    # once a team has played 5 games this season, who has actually been dressing decides the lineup; before that, ice time
+    started = teamGames[teamGames["season"] == season].groupby("team").size()
+    current["inSeason"] = current["team"].map(started).fillna(0) >= 5
+    current["group"] = np.where(current["position"] == "D", "D", "F")
+    current["sortGames"] = np.where(current["inSeason"], current["recentGames"], 0)
+    current = current.sort_values(["team", "group", "sortGames", "recentIcetime"], ascending=[True, True, False, False])
+    current["depth"] = current.groupby(["team", "group"]).cumcount()
+    current["typicalLineup"] = np.where(current["group"] == "D", current["depth"] < 6, current["depth"] < 12)
+    current = current.rename(columns={"ratingPost": "rating"}).drop(columns=["sortGames", "inSeason"])
     current.to_csv(DATA + "player_state.csv", index=False)
     return current

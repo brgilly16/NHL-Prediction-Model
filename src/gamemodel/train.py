@@ -286,6 +286,16 @@ def trainModel():
         json.dump(report, f, indent=2, default=float)
     print("Saved model to", DATA + "game_model.pkl")
     return final
+def refitModel():
+    # daily update: refit the already chosen model on every game (including new ones) without re-running the backtest
+    with open(DATA + "model_report.json") as f:
+        report = json.load(f)
+    df = loadFeatures()
+    final = GameModel(**report["best"]).fit(df)
+    with open(DATA + "game_model.pkl", "wb") as f:
+        pickle.dump(final, f)
+    print("Refit model on", len(df), "rows through", df["date"].max().date())
+    return final
 if __name__ == "__main__":
     # import through the package so the saved model can be loaded by src.gamemodel.predict
     from src.gamemodel.train import trainModel as run

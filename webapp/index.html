@@ -157,6 +157,9 @@ svg.spark polyline { fill: none; stroke: var(--home); stroke-width: 1.6; stroke-
 svg.spark circle { fill: var(--home); }
 .stat2 { font-variant-numeric: tabular-nums; }
 .btn.more { margin-top: 12px; }
+.preseason { margin: 18px 0 0; padding: 10px 14px; border-radius: 8px; background: color-mix(in srgb, var(--home) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--home) 35%, transparent); color: var(--ink-2); font-size: 14px; }
+.foot { color: var(--muted); font-size: 13px; padding-block: 0 32px; }
+.foot a { color: var(--ink-2); }
 .btn { font: 600 14px var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
 </style>
 
@@ -171,12 +174,13 @@ svg.spark circle { fill: var(--home); }
       <button role="tab" data-tab="rankings" aria-selected="false">Power rankings</button>
       <button role="tab" data-tab="teams" aria-selected="false">Teams</button>
       <button role="tab" data-tab="model" aria-selected="false">Model report</button>
-      <button role="tab" data-tab="backtest" aria-selected="false">2025-26 backtest</button>
+      <button role="tab" data-tab="backtest" aria-selected="false" data-backtest-season="{s} backtest">Backtest</button>
     </nav>
   </div>
 </header>
 
 <main class="wrap">
+  <p class="preseason" id="preseasonNote" hidden>Preseason: ratings carry over from last season, pulled partway toward average. They update daily once games start, and offseason trades and signings show up after a player's first game with his new team.</p>
   <!-- predict -->
   <section class="panel" id="predict">
     <div class="box">
@@ -283,12 +287,12 @@ svg.spark circle { fill: var(--home); }
   <section class="panel" id="model" hidden>
     <div class="box">
       <h2>How good is it?</h2>
-      <p class="note">Walk-forward backtest: every season from 2017-18 to 2025-26 is predicted by a model trained only on earlier seasons. Log loss scores the probabilities (lower is better). Shootouts count as a coin flip.</p>
+      <p class="note">Walk-forward backtest: every season from 2017-18 on is predicted by a model trained only on earlier seasons. Log loss scores the probabilities (lower is better). Shootouts count as a coin flip.</p>
       <div class="tiles" id="headline"></div>
     </div>
     <div class="box">
       <h3>Accuracy by confidence tier</h3>
-      <p class="note">Each pick's tier comes from how confident the model is in the favorite. Stronger tiers are right much more often, but they cover fewer games. "All seasons" is the full 2017-18 to 2025-26 backtest.</p>
+      <p class="note">Each pick's tier comes from how confident the model is in the favorite. Stronger tiers are right much more often, but they cover fewer games. "All seasons" is the full backtest since 2017-18.</p>
       <div class="scroll"><table id="tierTable"></table></div>
     </div>
     <div class="box">
@@ -297,7 +301,7 @@ svg.spark circle { fill: var(--home); }
     </div>
     <div class="split">
       <div class="box">
-        <h3>Calibration, 2025-26</h3>
+        <h3 data-backtest-season="Calibration, {s}">Calibration</h3>
         <p class="note">Games grouped by predicted home win chance. On the dashed line, "60%" means the home team really won 60% of the time.</p>
         <div class="chart"><canvas id="calibChart"></canvas></div>
       </div>
@@ -315,7 +319,7 @@ svg.spark circle { fill: var(--home); }
   <!-- backtest -->
   <section class="panel" id="backtest" hidden>
     <div class="box">
-      <div class="headrow"><h2>2025-26 game log</h2>
+      <div class="headrow"><h2 data-backtest-season="{s} game log">Game log</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <select id="btTier" aria-label="Filter games by confidence tier"><option value="">All tiers</option><option>Strong</option><option>Solid</option><option>Lean</option><option>Toss-up</option></select>
           <select id="btTeam" aria-label="Filter games by team"><option value="">All teams</option></select>
@@ -326,6 +330,8 @@ svg.spark circle { fill: var(--home); }
     </div>
   </section>
 </main>
+
+<footer class="wrap foot">Data from <a href="https://moneypuck.com" rel="noopener">MoneyPuck.com</a>. Updated automatically every morning during the season.</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="data.js" charset="utf-8"></script>

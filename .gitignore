@@ -1,5 +1,13 @@
 *.csv
+# inputs the models need, committed so the daily GitHub Action can rebuild the site
+!data/teams_2008_to_2024.csv
+!data/standings.csv
+!data/skaters (1).csv
+!data/gar.csv
+!data/rankings.csv
+!data/gamemodel/backtest_latest_season.csv
 __pycache__/
 *.pyc
-# downloaded MoneyPuck data (re-downloaded by python -m src.gamemodel.run)
+# downloaded MoneyPuck data (re-downloaded by python -m src.gamemodel.run, cached between GitHub Action runs)
 data/gamemodel/skaters/
+data/gamemodel/seasons/

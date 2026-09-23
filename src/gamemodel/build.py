@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from src.model.calcweights import calcWeightsTeam
-from src.gamemodel.download import downloadAll, DATA
+from src.gamemodel.download import downloadAll, loadTeamRaw, loadGoalieGames, currentSeason, fetchRosters, DATA
 from src.gamemodel.players import addLineupFeatures, playerState
 # builds one row per team per regular season game where every feature only uses information from BEFORE that game
 # also saves each team's and goalie's current state (after their latest game) so upcoming games can be predicted
@@ -28,7 +28,7 @@ ELO_HOME = 35
 ELO_REGRESS = 0.3
 def loadTeamGames():
     columns = ["team", "season", "gameId", "opposingTeam", "home_or_away", "gameDate", "situation", "playoffGame", "iceTime"] + POWER_STATS
-    df = pd.read_csv(DATA + "all_teams_raw.csv", usecols=columns)
+    df = loadTeamRaw(columns)
     df = df[(df["situation"] == "all") & (df["playoffGame"] == 0)].drop(columns=["situation", "playoffGame"])
     df["team"] = df["team"].replace(CODE_MAP)
     df["opponent"] = df["opposingTeam"].replace(CODE_MAP)
@@ -48,7 +48,7 @@ def loadSituations():
     # per game 5 on 5, power play and penalty kill numbers plus score and venue adjusted xG
     columns = ["team", "gameId", "situation", "playoffGame", "xGoalsFor", "xGoalsAgainst", "iceTime",
                "scoreVenueAdjustedxGoalsFor", "scoreVenueAdjustedxGoalsAgainst"]
-    raw = pd.read_csv(DATA + "all_teams_raw.csv", usecols=columns)
+    raw = loadTeamRaw(columns + ["season"])
     raw = raw[raw["playoffGame"] == 0]
     raw["team"] = raw["team"].replace(CODE_MAP)
     raw = raw.drop_duplicates(["gameId", "team", "situation"]).set_index(["gameId", "team", "situation"])
@@ -167,7 +167,7 @@ def addElo(df):
     return df.drop(columns=["eloHome", "eloAway"]), pd.Series(elo, name="elo")
 def goalieRatings():
     # rating = shrunk, recency weighted goals saved above expected per 60 minutes, going into each game
-    goalies = pd.read_csv(DATA + "goalie_games.csv")
+    goalies = loadGoalieGames()
     goalies["playerTeam"] = goalies["playerTeam"].replace(CODE_MAP)
     goalies = goalies.drop_duplicates(["playerId", "gameId"]).sort_values(["playerId", "gameDate", "gameId"])
     decay = 0.5 ** (1 / GOALIE_HALFLIFE)
@@ -214,36 +214,61 @@ def buildFeatures():
     df = addOpponent(df)
     df = df.sort_values(["date", "gameId", "home"]).reset_index(drop=True)
     df.to_csv(DATA + "features.csv", index=False)
-    saveCurrentState(df, finalPower, elo, goalies, goalieNow, leagueNow)
-    playerState(skaters, df)
+    # current NHL rosters for every active team, so players who moved in the offseason are on their new team
+    season = stateSeason(df)
+    teamCodes = df[df["season"] >= season - 1].sort_values("date").groupby("franchise")["team"].last().tolist()
+    rosters = fetchRosters(sorted(teamCodes))
+    saveCurrentState(df, finalPower, elo, goalies, goalieNow, leagueNow, rosters)
+    playerState(skaters, df, season, rosters)
     print("Finished building features. Rows:", len(df))
     return df
-def saveCurrentState(df, finalPower, elo, goalies, goalieNow, leagueNow):
+def stateSeason(df):
+    # the season upcoming games belong to: once September arrives with no games yet, it is the new season (preseason)
+    return max(int(df["season"].max()), currentSeason())
+def saveCurrentState(df, finalPower, elo, goalies, goalieNow, leagueNow, rosters=None):
     # each team's state after its latest game: PowerScore, Elo, form, and its goalies
-    latestSeason = df["season"].max()
-    teams = df[df["season"] == latestSeason].groupby("franchise").agg(
-        team=("team", "last"), lastGame=("date", "max"), gamesPlayed=("gameId", "count"))
-    power = finalPower[finalPower["season"] == latestSeason].set_index("franchise")["powerFinal"]
-    previous = finalPower[finalPower["season"] == latestSeason - 1].set_index("franchise")["powerFinal"]
-    teams["powerRaw"] = power
+    season = stateSeason(df)
+    active = df[df["season"] >= season - 1].sort_values("date")
+    teams = active.groupby("franchise").agg(team=("team", "last"), lastGame=("date", "max"), lastSeason=("season", "max"))
+    teams["gamesPlayed"] = df[df["season"] == season].groupby("franchise").size().reindex(teams.index).fillna(0).astype(int)
+    teams["season"] = season
+    power = finalPower[finalPower["season"] == season].set_index("franchise")["powerFinal"]
+    previous = finalPower[finalPower["season"] == season - 1].set_index("franchise")["powerFinal"]
+    teams["powerRaw"] = power.reindex(teams.index)
     teams["powerPrev"] = previous.reindex(teams.index).fillna(finalPower["powerFinal"].mean())
+    # teams that have not played yet this season get the same between-season Elo regression used in training
     teams["elo"] = elo.reindex(teams.index)
+    newSeason = teams["lastSeason"] < season
+    teams.loc[newSeason, "elo"] = 1500 + (teams.loc[newSeason, "elo"] - 1500) * (1 - ELO_REGRESS)
     teams = teams.join(currentForm(df))
     teams["leagueGoals"] = leagueNow
     # typical lineup power after the latest game
     ordered = df.sort_values(["franchise", "date", "gameId"])
     teams["lineupTypical"] = ordered.groupby("franchise")["lineupPower"].apply(lambda s: s.ewm(halflife=10).mean().iloc[-1])
-    teams.reset_index().to_csv(DATA + "team_state.csv", index=False)
-    # goalies who played for each team this season, with their current rating and number of starts
-    season = goalies[goalies["season"] == latestSeason]
-    starts = df[df["season"] == latestSeason].groupby(["team", "goalieId"]).size().rename("starts")
-    recent = df[df["season"] == latestSeason].sort_values("date").groupby("team").tail(10)
-    recentStarts = recent.groupby(["team", "goalieId"]).size().rename("recentStarts")
-    roster = season.groupby(["playerTeam", "playerId"]).agg(name=("name", "last"), lastGame=("gameDate", "max")).reset_index()
-    roster = roster.rename(columns={"playerTeam": "team", "playerId": "goalieId"})
+    teams.drop(columns=["lastSeason"]).reset_index().to_csv(DATA + "team_state.csv", index=False)
+    # goalies: on the team from the current NHL roster when available, otherwise the team they last played for
+    recentGoalies = goalies[goalies["season"] >= season - 1].sort_values(["gameDate", "gameId"])
+    roster = recentGoalies.groupby("playerId").agg(team=("playerTeam", "last"), name=("name", "last")).reset_index()
+    if rosters is not None and len(rosters):
+        goalieRoster = rosters[rosters["position"] == "G"][["playerId", "name", "team"]]
+        roster = roster[~roster["team"].isin(goalieRoster["team"].unique()) & ~roster["playerId"].isin(goalieRoster["playerId"])]
+        roster = pd.concat([roster, goalieRoster], ignore_index=True)
+    roster = roster.rename(columns={"playerId": "goalieId"})
     roster["goalieId"] = roster["goalieId"].astype(float)
-    roster = roster.join(starts, on=["team", "goalieId"]).join(recentStarts, on=["team", "goalieId"]).fillna({"starts": 0, "recentStarts": 0})
-    roster["goalieRating"] = roster["goalieId"].map(lambda g: goalieNow[g][0])
+    # starts with this team (its last 82 and last 10 games) and each goalie's own starts over the last two seasons on any team
+    byTeam = df.sort_values("date").groupby("team")
+    starts = byTeam.tail(82).groupby(["team", "goalieId"]).size().rename("starts")
+    recentStarts = byTeam.tail(10).groupby(["team", "goalieId"]).size().rename("recentStarts")
+    ownStarts = df[df["season"] >= season - 1].groupby("goalieId").size().rename("ownStarts")
+    roster = roster.join(starts, on=["team", "goalieId"]).join(recentStarts, on=["team", "goalieId"]).join(ownStarts, on="goalieId")
+    roster = roster.fillna({"starts": 0, "recentStarts": 0, "ownStarts": 0})
+    # goalies with no NHL games yet are rated as average
+    roster["goalieRating"] = roster["goalieId"].map(lambda g: goalieNow[g][0] if g in goalieNow else 0.0)
+    # likely starter: once a team has played 5 games this season, recent starts for the team; before that, starts on any team
+    started = df[df["season"] == season].groupby("team").size()
+    inSeason = roster["team"].map(started).fillna(0) >= 5
+    roster["order"] = np.where(inSeason, roster["recentStarts"] * 1000 + roster["starts"], roster["ownStarts"])
+    roster = roster.sort_values(["team", "order"], ascending=[True, False]).drop(columns=["order"])
     roster.to_csv(DATA + "goalie_state.csv", index=False)
 if __name__ == "__main__":
     buildFeatures()
