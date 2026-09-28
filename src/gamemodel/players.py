@@ -1,3 +1,5 @@
+import re
+import unicodedata
 import numpy as np
 import pandas as pd
 from src.model.calcweights import calcWeightsPlayer
@@ -115,7 +117,33 @@ def addLineupFeatures(teamGames):
     df["lineupTypical"] = typical.groupby(df["franchise"]).shift(1)
     df["lineupDelta"] = (df["lineupPower"] - df["lineupTypical"]).fillna(0)
     return df, skaters
-def playerState(skaters, teamGames, season, rosters=None):
+def nameKey(name):
+    # accents, punctuation and case removed so "Jiří" matches "Jiri" and "J.J." matches "JJ"
+    plain = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z]", "", plain.lower())
+def attachInjuries(players, injuries):
+    # adds injury status to players (matched on name and team, or on name alone when it is unique in the league)
+    players = players.copy()
+    for column in ["injury", "injuryType", "returnDate"]:
+        players[column] = None
+    players["injuryOut"] = False
+    if injuries is None or not len(injuries):
+        return players
+    injuries = injuries.assign(key=injuries["name"].map(nameKey))
+    keys = players["name"].map(nameKey)
+    byTeam = injuries.set_index(["key", "team"])
+    unique = injuries.drop_duplicates("key", keep=False).set_index("key")
+    for i, key, team in zip(players.index, keys, players["team"]):
+        if (key, team) in byTeam.index:
+            match = byTeam.loc[(key, team)]
+            match = match.iloc[0] if isinstance(match, pd.DataFrame) else match
+        elif key in unique.index and not (players["name"].map(nameKey) == key).sum() > 1:
+            match = unique.loc[key]
+        else:
+            continue
+        players.loc[i, ["injury", "injuryType", "returnDate", "injuryOut"]] = [match["status"], match["injury"], match["returnDate"], bool(match["out"])]
+    return players
+def playerState(skaters, teamGames, season, rosters=None, injuries=None):
     # each skater's current rating and each team's projected lineup (12 forwards and 6 defensemen)
     # players are placed on the team from the current NHL roster (so offseason trades and signings count right away);
     # without a roster a player stays with the team he last played for
@@ -129,6 +157,20 @@ def playerState(skaters, teamGames, season, rosters=None):
         # players with no NHL games yet (rookies, signings from other leagues) start at replacement level
         onRoster["ratingPost"] = onRoster["ratingPost"].fillna(0.0)
         current = pd.concat([current, onRoster[["playerId", "name", "team", "position", "ratingPost"]]], ignore_index=True)
+    # players on injured reserve are left off the NHL's current roster, so injured players from the injury report are added back
+    # (with their ratings) to keep them in the depth chart: they show as out and can be put back in on the site
+    if injuries is not None and len(injuries):
+        listed = set(zip(current["name"].map(nameKey), current["team"]))
+        lastByName = last.reset_index().assign(key=lambda d: d["name"].map(nameKey)).drop_duplicates("key", keep=False).set_index("key")
+        added = []
+        for _, inj in injuries.iterrows():
+            key = nameKey(inj["name"])
+            if (key, inj["team"]) in listed or key not in lastByName.index:
+                continue
+            p = lastByName.loc[key]
+            added.append({"playerId": p["playerId"], "name": p["name"], "team": inj["team"], "position": p["position"], "ratingPost": p["ratingPost"]})
+        if added:
+            current = pd.concat([current[~current["playerId"].isin([a["playerId"] for a in added])], pd.DataFrame(added)], ignore_index=True)
     # expected role: average ice time over each player's last 20 games (any team); games in his team's last 10 games
     history = skaters[skaters["season"] >= season - 1].sort_values("date").groupby("playerId").tail(20)
     role = history.groupby("playerId")["icetime"].mean().rename("recentIcetime")
@@ -146,5 +188,7 @@ def playerState(skaters, teamGames, season, rosters=None):
     current["depth"] = current.groupby(["team", "group"]).cumcount()
     current["typicalLineup"] = np.where(current["group"] == "D", current["depth"] < 6, current["depth"] < 12)
     current = current.rename(columns={"ratingPost": "rating"}).drop(columns=["sortGames", "inSeason"])
+    # injured and suspended players keep their place in the depth chart; the predictions mark them out (the next man up plays)
+    current = attachInjuries(current, injuries)
     current.to_csv(DATA + "player_state.csv", index=False)
     return current

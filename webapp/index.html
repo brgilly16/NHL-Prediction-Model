@@ -105,6 +105,8 @@ tbody tr:hover { background: var(--surface-2); }
 .chip b { font-weight: 600; color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
 .chip[aria-pressed="true"] { background: color-mix(in srgb, var(--bad) 14%, var(--surface)); border-color: var(--bad); color: var(--bad); text-decoration: line-through; }
 .chip[aria-pressed="true"] b { color: var(--bad); }
+.chip .inj { font: 700 10px/1 var(--body); font-style: normal; letter-spacing: .04em; text-transform: uppercase; margin-left: 6px; padding: 2px 5px; border-radius: 4px; color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); text-decoration: none; display: inline-block; }
+.game .outs { color: var(--bad); }
 .scoreline { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 12px; }
 .scoreline .t { font: 700 20px/1 var(--display); letter-spacing: .06em; }
 .scoreline .p { font: 700 64px/0.9 var(--display); font-variant-numeric: tabular-nums; }
@@ -223,7 +225,7 @@ svg.spark circle { fill: var(--home); }
             <label class="field">Starting goalie<select id="awayGoalie"></select></label>
             <label class="field">Days of rest<select id="awayRest"><option value="1">1 · back-to-back</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4+</option></select></label>
           </div>
-          <span class="role">Tap players who are out</span>
+          <span class="role">Players out (injuries pre-marked, tap to change)</span>
           <div class="roster" id="awayRoster"></div>
         </div>
         <div class="vs">@</div>
@@ -234,7 +236,7 @@ svg.spark circle { fill: var(--home); }
             <label class="field">Starting goalie<select id="homeGoalie"></select></label>
             <label class="field">Days of rest<select id="homeRest"><option value="1">1 · back-to-back</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4+</option></select></label>
           </div>
-          <span class="role">Tap players who are out</span>
+          <span class="role">Players out (injuries pre-marked, tap to change)</span>
           <div class="roster" id="homeRoster"></div>
         </div>
       </div>
@@ -365,5 +367,5 @@ svg.spark circle { fill: var(--home); }
 <footer class="wrap foot">Data from <a href="https://moneypuck.com" rel="noopener">MoneyPuck.com</a>. Updated automatically every morning during the season.</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="data.js?v=1790614767" charset="utf-8"></script>
-<script src="app.js?v=1790614767" charset="utf-8"></script>
+<script src="data.js?v=1790615414" charset="utf-8"></script>
+<script src="app.js?v=1790615414" charset="utf-8"></script>

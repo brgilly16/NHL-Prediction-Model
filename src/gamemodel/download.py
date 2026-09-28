@@ -178,6 +178,31 @@ def fetchRosters(teams):
     rosters.to_csv(DATA + "rosters.csv", index=False)
     print("Fetched rosters:", rosters["team"].nunique(), "teams,", len(rosters), "players")
     return rosters
+# ESPN team abbreviations that differ from the NHL's
+ESPN_TEAMS = {"TB": "TBL", "NJ": "NJD", "SJ": "SJS", "LA": "LAK", "UTAH": "UTA"}
+# statuses that keep a player out of the lineup (day-to-day players are assumed to play)
+OUT_STATUSES = {"Out", "Injured Reserve", "Suspension", "Long Term Injured Reserve"}
+def fetchInjuries():
+    # current injuries and suspensions from ESPN's public injury feed (unofficial); an empty list if it is unavailable
+    columns = ["name", "team", "status", "out", "injury", "returnDate", "updated"]
+    try:
+        response = get("https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries")
+        teams = response.json().get("injuries", []) if response.status_code == 200 else []
+    except ValueError:
+        teams = []
+    rows = []
+    for team in teams:
+        for item in team.get("injuries", []):
+            athlete = item.get("athlete", {})
+            details = item.get("details", {}) or {}
+            abbrev = athlete.get("team", {}).get("abbreviation", "")
+            rows.append({"name": athlete.get("displayName"), "team": ESPN_TEAMS.get(abbrev, abbrev), "status": item.get("status"),
+                         "out": item.get("status") in OUT_STATUSES, "injury": details.get("type"),
+                         "returnDate": details.get("returnDate"), "updated": item.get("date")})
+    injuries = pd.DataFrame(rows, columns=columns)
+    injuries.to_csv(DATA + "injuries.csv", index=False)
+    print("Fetched injuries:", len(injuries), "players,", int(injuries["out"].sum()), "out")
+    return injuries
 def downloadAll():
     if not os.path.exists(DATA + "all_teams_raw.csv"):
         downloadAllTeams()

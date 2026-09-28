@@ -69,7 +69,14 @@ class Predictor:
             for column in own:
                 row["opp_" + column] = other[column]
         return pd.DataFrame(rows)
-    def predict(self, home, away, homeGoalie=None, awayGoalie=None, homeRest=2, awayRest=2, homeMissing=None, awayMissing=None):
+    def injuredOut(self, team):
+        players = self.players[(self.players["team"] == team) & (self.players["injuryOut"] == True)]
+        return players["name"].tolist()
+    def predict(self, home, away, homeGoalie=None, awayGoalie=None, homeRest=2, awayRest=2, homeMissing=None, awayMissing=None, injuries=True):
+        # injured and suspended players are out unless injuries=False; homeMissing / awayMissing add more players out
+        if injuries:
+            homeMissing = list(homeMissing or []) + self.injuredOut(home)
+            awayMissing = list(awayMissing or []) + self.injuredOut(away)
         model = self.model
         rows = self.buildRows(home, away, homeGoalie, awayGoalie, homeRest, awayRest, homeMissing, awayMissing)
         rates = model.predictGoals(rows)

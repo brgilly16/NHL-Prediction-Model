@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 from src.model.calcweights import calcWeightsTeam
-from src.gamemodel.download import downloadAll, loadTeamRaw, loadGoalieGames, currentSeason, fetchRosters, DATA
-from src.gamemodel.players import addLineupFeatures, playerState
+from src.gamemodel.download import downloadAll, loadTeamRaw, loadGoalieGames, currentSeason, fetchRosters, fetchInjuries, DATA
+from src.gamemodel.players import addLineupFeatures, playerState, attachInjuries
 # builds one row per team per regular season game where every feature only uses information from BEFORE that game
 # also saves each team's and goalie's current state (after their latest game) so upcoming games can be predicted
 CODE_MAP = {"L.A": "LAK", "N.J": "NJD", "S.J": "SJS", "T.B": "TBL"}
@@ -218,14 +218,15 @@ def buildFeatures():
     season = stateSeason(df)
     teamCodes = df[df["season"] >= season - 1].sort_values("date").groupby("franchise")["team"].last().tolist()
     rosters = fetchRosters(sorted(teamCodes))
-    saveCurrentState(df, finalPower, elo, goalies, goalieNow, leagueNow, rosters)
-    playerState(skaters, df, season, rosters)
+    injuries = fetchInjuries()
+    saveCurrentState(df, finalPower, elo, goalies, goalieNow, leagueNow, rosters, injuries)
+    playerState(skaters, df, season, rosters, injuries)
     print("Finished building features. Rows:", len(df))
     return df
 def stateSeason(df):
     # the season upcoming games belong to: once September arrives with no games yet, it is the new season (preseason)
     return max(int(df["season"].max()), currentSeason())
-def saveCurrentState(df, finalPower, elo, goalies, goalieNow, leagueNow, rosters=None):
+def saveCurrentState(df, finalPower, elo, goalies, goalieNow, leagueNow, rosters=None, injuries=None):
     # each team's state after its latest game: PowerScore, Elo, form, and its goalies
     season = stateSeason(df)
     active = df[df["season"] >= season - 1].sort_values("date")
@@ -268,7 +269,9 @@ def saveCurrentState(df, finalPower, elo, goalies, goalieNow, leagueNow, rosters
     started = df[df["season"] == season].groupby("team").size()
     inSeason = roster["team"].map(started).fillna(0) >= 5
     roster["order"] = np.where(inSeason, roster["recentStarts"] * 1000 + roster["starts"], roster["ownStarts"])
-    roster = roster.sort_values(["team", "order"], ascending=[True, False]).drop(columns=["order"])
+    # an injured or suspended goalie is never the projected starter
+    roster = attachInjuries(roster, injuries)
+    roster = roster.sort_values(["team", "injuryOut", "order"], ascending=[True, True, False]).drop(columns=["order"])
     roster.to_csv(DATA + "goalie_state.csv", index=False)
 if __name__ == "__main__":
     buildFeatures()

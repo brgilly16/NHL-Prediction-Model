@@ -148,14 +148,26 @@ tabs.forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
 
 // ---------- predict ----------
 const state = { homeOut: new Set(), awayOut: new Set() };
+// injured and suspended players (ESPN injury report) start out of the lineup; tap to put them back in
+const STATUS_SHORT = { "Injured Reserve": "IR", "Long Term Injured Reserve": "LTIR", "Out": "Out", "Suspension": "Susp", "Day-To-Day": "DTD" };
+const injuredOut = (code) => new Set((D.players[code] || []).filter((p) => p.injuryOut).map((p) => p.name));
+function injuryNote(p) {
+  const back = p.returnDate ? ` · expected back ${new Date(p.returnDate + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "";
+  return `${p.injury}${p.injuryType ? " (" + p.injuryType + ")" : ""}${back}`;
+}
 function fillSide(side) {
   const code = $(side).value;
   $(side + "Goalie").innerHTML = (D.goalies[code] || []).map((g) =>
-    `<option value="${g.goalieId}">${esc(g.name)} · ${g.starts} GS · ${signed(g.goalieRating)}</option>`).join("");
-  state[side + "Out"] = new Set();
-  const players = (D.players[code] || []).filter((p) => p.typical);  // forwards first, then defense, in depth order
-  $(side + "Roster").innerHTML = players.map((p) =>
-    `<button type="button" class="chip" aria-pressed="false" data-name="${esc(p.name)}" title="Rating ${p.rating.toFixed(1)} GAR per 82 games">${esc(p.name)}<b>${p.rating.toFixed(1)}</b></button>`).join("");
+    `<option value="${g.goalieId}">${esc(g.name)} · ${g.starts} GS · ${signed(g.goalieRating)}${g.injury ? " · " + (STATUS_SHORT[g.injury] || g.injury) : ""}</option>`).join("");
+  state[side + "Out"] = injuredOut(code);
+  // the typical lineup plus any injured regular, forwards first, then defense, in depth order
+  const players = (D.players[code] || []).filter((p) => p.typical || (p.injury && p.depth !== undefined && p.recentGames > 0));
+  $(side + "Roster").innerHTML = players.map((p) => {
+    const out = state[side + "Out"].has(p.name);
+    const tag = p.injury ? `<i class="inj">${STATUS_SHORT[p.injury] || p.injury}</i>` : "";
+    const title = `Rating ${p.rating.toFixed(1)} GAR per 82 games${p.injury ? " · " + injuryNote(p) : ""}`;
+    return `<button type="button" class="chip" aria-pressed="${out}" data-name="${esc(p.name)}" title="${esc(title)}">${esc(p.name)}<b>${p.rating.toFixed(1)}</b>${tag}</button>`;
+  }).join("");
   $(side + "Roster").querySelectorAll(".chip").forEach((chip) => chip.addEventListener("click", () => {
     const out = state[side + "Out"], name = chip.dataset.name;
     out.has(name) ? out.delete(name) : out.add(name);
@@ -249,22 +261,26 @@ function renderSlate(date) {
   const games = D.schedule.filter((g) => g.date === date);
   const [label, sub] = dayLabel(date);
   $("slateTitle").textContent = label === "Today" ? "Today's games" : `Games · ${label}${sub ? " " + sub : ""}`;
-  $("slateNote").textContent = `Predicted with ratings through ${D.asOf}${D.preseason ? " (preseason)" : ""}, projected starting goalies, and each team's real days of rest. Tap a game to change goalies, rest or players who are out.`;
+  $("slateNote").textContent = `Predicted with ratings through ${D.asOf}${D.preseason ? " (preseason)" : ""}, projected starting goalies, each team's real days of rest, and the latest injury report (injured and suspended players are out). Tap a game to change goalies, rest or players who are out.`;
   const home = css("--home"), away = css("--away");
   $("slate").innerHTML = games.map((g, i) => {
-    const r = predict({ home: g.home, away: g.away, homeRest: g.homeRest, awayRest: g.awayRest, homeOut: new Set(), awayOut: new Set() });
+    const r = predict({ home: g.home, away: g.away, homeRest: g.homeRest, awayRest: g.awayRest, homeOut: injuredOut(g.home), awayOut: injuredOut(g.away) });
     const tier = tierOf(r.homeWin), level = TIERS.findIndex(([n]) => n === tier);
     const start = new Date(g.start);
     const time = Date.now() > start ? "Started" : start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     const rest = (team, days) => (days === 1 ? `${team} on a back-to-back` : "");
     const notes = [rest(g.away, g.awayRest), rest(g.home, g.homeRest)].filter(Boolean).join(" · ");
+    // regulars (projected lineup) who are out, best players first
+    const outList = (team) => { const list = (D.players[team] || []).filter((p) => p.injuryOut && p.typical).sort((a, b) => b.rating - a.rating).map((p) => p.name.split(" ").slice(1).join(" "));
+      return list.length ? `${team} out: ${list.slice(0, 3).join(", ")}${list.length > 3 ? ` +${list.length - 3}` : ""}` : ""; };
+    const injuries = [outList(g.away), outList(g.home)].filter(Boolean).join(" · ");
     const line = (team, p, color, fav) => `<div class="line ${fav ? "fav" : "dog"}"><span class="abbr">${team}</span><span class="bar"><i style="width:${(p * 100).toFixed(1)}%;background:${color}"></i></span><span class="pct">${pct(p)}</span></div>`;
     return `<button type="button" class="game" data-i="${i}" aria-label="${g.away} at ${g.home}, ${g.home} ${pct(r.homeWin)} to win">
       <div class="top"><span>${time}</span><span class="tag t${level}">${tier}</span></div>
       ${line(g.away, r.awayWin, away, r.awayWin > r.homeWin)}
       ${line(g.home, r.homeWin, home, r.homeWin >= r.awayWin)}
       <div class="foot"><span>Expected ${g.away} ${r.awayRate.toFixed(1)} – ${r.homeRate.toFixed(1)} ${g.home}</span>
-      <span>${esc(r.awayGoalie)} vs ${esc(r.homeGoalie)}</span>${notes ? `<span>${notes}</span>` : ""}</div>
+      <span>${esc(r.awayGoalie)} vs ${esc(r.homeGoalie)}</span>${notes ? `<span>${notes}</span>` : ""}${injuries ? `<span class="outs">${esc(injuries)}</span>` : ""}</div>
     </button>`;
   }).join("");
   $("slate").querySelectorAll(".game").forEach((card) => card.addEventListener("click", () => loadGame(games[card.dataset.i])));
@@ -392,6 +408,7 @@ function renderTeam() {
     { label: "Player", value: (p) => esc(p.name) },
     { label: "Pos", value: (p) => p.position },
     { label: "Lineup", value: (p) => (p.typical ? '<span class="pill good">typical</span>' : '<span class="pill flat">depth</span>') },
+    { label: "Status", value: (p) => (p.injury ? `<span class="pill ${p.injuryOut ? "bad" : "flat"}" title="${esc(injuryNote(p))}">${STATUS_SHORT[p.injury] || p.injury}</span>` : "") },
     { label: "Games of last 10", num: true, value: (p) => p.recentGames },
     { label: "Current rating", num: true, value: (p) => fix(p.rating, 1) },
     { label: "Season PowerScore", num: true, value: (p) => fix(p.seasonScore, 1) }

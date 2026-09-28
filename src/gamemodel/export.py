@@ -93,10 +93,13 @@ def exportSite():
         group = group.sort_values(["group", "depth"])
         playerRows[team] = [{"name": p["name"], "position": p["position"], "rating": p["rating"], "typical": bool(p["typicalLineup"]),
                              "group": p["group"], "recentGames": int(p["recentGames"]),
+                             "injury": p["injury"] if isinstance(p["injury"], str) else None, "injuryOut": bool(p["injuryOut"]),
+                             "injuryType": p["injuryType"] if isinstance(p["injuryType"], str) else None,
+                             "returnDate": p["returnDate"] if isinstance(p["returnDate"], str) else None,
                              "seasonScore": seasonScore.get((p["name"], team), seasonScoreByName.get(p["name"]))}
                             for _, p in group.iterrows()]
     # goalie_state.csv is already ordered with the likely starter first
-    goalieRows = {team: group[["goalieId", "name", "starts", "recentStarts", "goalieRating"]].to_dict("records")
+    goalieRows = {team: group[["goalieId", "name", "starts", "recentStarts", "goalieRating", "injury", "injuryOut"]].to_dict("records")
                   for team, group in goalies.groupby("team", sort=False)}
     trends, recent = {}, {}
     for team, group in games.sort_values("date").groupby("team"):
