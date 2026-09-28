@@ -222,6 +222,62 @@ function drawGrid(r, home, away) {
   $("scoreGrid").innerHTML = html + "</tbody>";
 }
 
+// ---------- today's games ----------
+const localDay = (d) => d.toLocaleDateString("en-CA");
+function dayLabel(date) {
+  const today = localDay(new Date()), tomorrow = localDay(new Date(Date.now() + 864e5));
+  if (date === today) return ["Today", ""];
+  if (date === tomorrow) return ["Tomorrow", ""];
+  const d = new Date(date + "T12:00:00");
+  return [d.toLocaleDateString(undefined, { weekday: "short" }), d.toLocaleDateString(undefined, { month: "short", day: "numeric" })];
+}
+function renderDays() {
+  const today = localDay(new Date());
+  const dates = [...new Set((D.schedule || []).map((g) => g.date))].filter((d) => d >= today);
+  if (!dates.length) {
+    $("slateTitle").textContent = "Games";
+    $("slateNote").textContent = "No regular-season games in the next two weeks. Build any matchup below.";
+    $("dayPicker").hidden = true;
+    return;
+  }
+  $("dayPicker").innerHTML = dates.map((d) => { const [a, b] = dayLabel(d); return `<button type="button" data-date="${d}" aria-pressed="false">${a}${b ? `<small>${b}</small>` : ""}</button>`; }).join("");
+  $("dayPicker").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => renderSlate(b.dataset.date)));
+  renderSlate(dates[0]);
+}
+function renderSlate(date) {
+  $("dayPicker").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.date === date));
+  const games = D.schedule.filter((g) => g.date === date);
+  const [label, sub] = dayLabel(date);
+  $("slateTitle").textContent = label === "Today" ? "Today's games" : `Games · ${label}${sub ? " " + sub : ""}`;
+  $("slateNote").textContent = `Predicted with ratings through ${D.asOf}${D.preseason ? " (preseason)" : ""}, projected starting goalies, and each team's real days of rest. Tap a game to change goalies, rest or players who are out.`;
+  const home = css("--home"), away = css("--away");
+  $("slate").innerHTML = games.map((g, i) => {
+    const r = predict({ home: g.home, away: g.away, homeRest: g.homeRest, awayRest: g.awayRest, homeOut: new Set(), awayOut: new Set() });
+    const tier = tierOf(r.homeWin), level = TIERS.findIndex(([n]) => n === tier);
+    const start = new Date(g.start);
+    const time = Date.now() > start ? "Started" : start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const rest = (team, days) => (days === 1 ? `${team} on a back-to-back` : "");
+    const notes = [rest(g.away, g.awayRest), rest(g.home, g.homeRest)].filter(Boolean).join(" · ");
+    const line = (team, p, color, fav) => `<div class="line ${fav ? "fav" : "dog"}"><span class="abbr">${team}</span><span class="bar"><i style="width:${(p * 100).toFixed(1)}%;background:${color}"></i></span><span class="pct">${pct(p)}</span></div>`;
+    return `<button type="button" class="game" data-i="${i}" aria-label="${g.away} at ${g.home}, ${g.home} ${pct(r.homeWin)} to win">
+      <div class="top"><span>${time}</span><span class="tag t${level}">${tier}</span></div>
+      ${line(g.away, r.awayWin, away, r.awayWin > r.homeWin)}
+      ${line(g.home, r.homeWin, home, r.homeWin >= r.awayWin)}
+      <div class="foot"><span>Expected ${g.away} ${r.awayRate.toFixed(1)} – ${r.homeRate.toFixed(1)} ${g.home}</span>
+      <span>${esc(r.awayGoalie)} vs ${esc(r.homeGoalie)}</span>${notes ? `<span>${notes}</span>` : ""}</div>
+    </button>`;
+  }).join("");
+  $("slate").querySelectorAll(".game").forEach((card) => card.addEventListener("click", () => loadGame(games[card.dataset.i])));
+}
+function loadGame(g) {
+  // put a scheduled game into the custom predictor with its real rest days
+  $("home").value = g.home; $("away").value = g.away;
+  fillSide("home"); fillSide("away");
+  $("homeRest").value = String(g.homeRest); $("awayRest").value = String(g.awayRest);
+  runPrediction();
+  $("customTitle").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 // ---------- rankings ----------
 const rankState = { view: "teams", pos: "", limit: 50 };
 function sparkline(values, lo, hi) {
@@ -467,5 +523,6 @@ for (const side of ["home", "away"]) {
   for (const id of [side + "Goalie", side + "Rest"]) $(id).addEventListener("change", runPrediction);
 }
 renderRankings();
+renderDays();
 runPrediction();
 showTab((location.hash || "#predict").slice(1));

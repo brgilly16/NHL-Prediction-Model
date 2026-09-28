@@ -131,6 +131,26 @@ tbody tr:hover { background: var(--surface-2); }
 table.heat td { text-align: center; font-size: 12.5px; min-width: 44px; border: 2px solid var(--surface); padding: 6px 4px; }
 table.heat th { text-align: center; }
 ul.how { margin: 0; padding-left: 18px; color: var(--ink-2); display: grid; gap: 6px; max-width: 95ch; }
+/* today's games */
+.days { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 12px; }
+.days button { font: 600 14px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; cursor: pointer; white-space: nowrap; }
+.days button small { font: 500 11px/1 var(--body); letter-spacing: 0; text-transform: none; margin-left: 6px; }
+.days button[aria-pressed="true"] { color: var(--ink); border-color: var(--home); background: color-mix(in srgb, var(--home) 12%, var(--surface)); }
+.slate { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.game { text-align: left; font: inherit; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; cursor: pointer; display: grid; gap: 8px; }
+.game:hover { border-color: color-mix(in srgb, var(--home) 60%, var(--line)); }
+.game:focus-visible { outline: 2px solid var(--home); outline-offset: 2px; }
+.game .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.game .tag { font-size: 11px; padding: 3px 6px; }
+.game .line { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 8px; }
+.game .abbr { font: 700 18px/1 var(--display); letter-spacing: .04em; }
+.game .pct { font: 700 22px/1 var(--display); font-variant-numeric: tabular-nums; }
+.game .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.game .bar i { display: block; height: 100%; border-radius: 3px; }
+.game .fav .abbr, .game .fav .pct { color: var(--ink); }
+.game .dog .abbr, .game .dog .pct { color: var(--muted); }
+.game .foot { font-size: 12.5px; color: var(--muted); display: grid; gap: 2px; }
+.section-title { margin: 8px 0 -6px; font-size: 18px; color: var(--ink-2); scroll-margin-top: 130px; }
 /* rankings */
 .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; }
 .seg button { font: 600 14px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: none; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; }
@@ -170,7 +190,7 @@ svg.spark circle { fill: var(--home); }
       <span class="asof" id="asOf"></span>
     </div>
     <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="predict" aria-selected="true">Predict a game</button>
+      <button role="tab" data-tab="predict" aria-selected="true">Games</button>
       <button role="tab" data-tab="rankings" aria-selected="false">Power rankings</button>
       <button role="tab" data-tab="teams" aria-selected="false">Teams</button>
       <button role="tab" data-tab="model" aria-selected="false">Model report</button>
@@ -183,6 +203,17 @@ svg.spark circle { fill: var(--home); }
   <p class="preseason" id="preseasonNote" hidden>Preseason: ratings carry over from last season, pulled partway toward average. They update daily once games start, and offseason trades and signings show up after a player's first game with his new team.</p>
   <!-- predict -->
   <section class="panel" id="predict">
+    <div class="box">
+      <div class="headrow">
+        <div>
+          <h2 id="slateTitle">Today's games</h2>
+          <p class="note" id="slateNote" style="margin:0"></p>
+        </div>
+      </div>
+      <div class="days" id="dayPicker" role="group" aria-label="Pick a day"></div>
+      <div class="slate" id="slate"></div>
+    </div>
+    <h2 class="section-title" id="customTitle">Build your own matchup</h2>
     <div class="box">
       <div class="faceoff">
         <div class="side away">
@@ -334,5 +365,5 @@ svg.spark circle { fill: var(--home); }
 <footer class="wrap foot">Data from <a href="https://moneypuck.com" rel="noopener">MoneyPuck.com</a>. Updated automatically every morning during the season.</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="data.js?v=1790201812" charset="utf-8"></script>
-<script src="app.js?v=1790201812" charset="utf-8"></script>
+<script src="data.js?v=1790614767" charset="utf-8"></script>
+<script src="app.js?v=1790614767" charset="utf-8"></script>

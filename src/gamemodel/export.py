@@ -4,7 +4,7 @@ import time as clock
 import pickle
 import numpy as np
 import pandas as pd
-from src.gamemodel.download import DATA
+from src.gamemodel.download import DATA, get
 from src.gamemodel.train import GameModel
 from src.gamemodel.build import TIME_ZONES
 # writes webapp/data.js: the trained model's weights plus every team's, goalie's and player's current state
@@ -24,6 +24,35 @@ def clean(value):
     if isinstance(value, np.integer):
         return int(value)
     return value
+def fetchSchedule(features):
+    # the next two weeks of regular season games (the NHL's public schedule), with each team's days of rest before each game
+    games, start = [], "now"
+    for week in range(2):
+        response = get(f"https://api-web.nhle.com/v1/schedule/{start}")
+        if response.status_code != 200:
+            print("Could not fetch the schedule")
+            break
+        data = response.json()
+        for day in data.get("gameWeek", []):
+            for g in day["games"]:
+                if g["gameType"] == 2:
+                    games.append({"id": g["id"], "date": day["date"], "start": g["startTimeUTC"],
+                                  "home": g["homeTeam"]["abbrev"], "away": g["awayTeam"]["abbrev"], "state": g.get("gameState")})
+        start = data.get("nextStartDate")
+        if not start:
+            break
+    games = sorted({g["id"]: g for g in games}.values(), key=lambda g: (g["date"], g["start"]))
+    # rest: days since the team's previous game (played or scheduled), capped at 4 like the training data
+    previous = features.groupby("team")["date"].max().dt.strftime("%Y-%m-%d").to_dict()
+    for g in games:
+        for side in ("home", "away"):
+            team = g[side]
+            last = previous.get(team)
+            days = (pd.Timestamp(g["date"]) - pd.Timestamp(last)).days if last else 4
+            g[side + "Rest"] = int(min(max(days, 1), 4))
+            previous[team] = g["date"]
+    print("Scheduled games:", len(games))
+    return games
 def exportSite():
     with open(DATA + "game_model.pkl", "rb") as f:
         model = pickle.load(f)
@@ -89,7 +118,8 @@ def exportSite():
                   "win": linear(model.winScaler, model.win, winColumns, model.win.coef_, model.win.intercept_)},
         "teams": teamRows, "goalies": goalieRows, "players": playerRows, "trends": trends, "recent": recent,
         "report": report,
-        "backtest": backtest[["date", "home", "away", "homeGoals", "awayGoals", "homeRate", "awayRate", "pWin"]].values.tolist()
+        "backtest": backtest[["date", "home", "away", "homeGoals", "awayGoals", "homeRate", "awayRate", "pWin"]].values.tolist(),
+        "schedule": fetchSchedule(features)
     }
     with open(OUTPUT, "w", encoding="utf-8") as f:
         f.write("window.NHL_DATA = " + json.dumps(clean(data), separators=(",", ":")) + ";\n")
