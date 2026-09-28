@@ -1,3 +1,4 @@
+import os
 import re
 import json
 import time as clock
@@ -122,7 +123,8 @@ def exportSite():
         "teams": teamRows, "goalies": goalieRows, "players": playerRows, "trends": trends, "recent": recent,
         "report": report,
         "backtest": backtest[["date", "home", "away", "homeGoals", "awayGoals", "homeRate", "awayRate", "pWin"]].values.tolist(),
-        "schedule": fetchSchedule(features)
+        "schedule": fetchSchedule(features),
+        "injuryReport": json.load(open(DATA + "injury_status.json")) if os.path.exists(DATA + "injury_status.json") else {"ok": False}
     }
     with open(OUTPUT, "w", encoding="utf-8") as f:
         f.write("window.NHL_DATA = " + json.dumps(clean(data), separators=(",", ":")) + ";\n")

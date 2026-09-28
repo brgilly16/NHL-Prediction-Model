@@ -261,7 +261,7 @@ function renderSlate(date) {
   const games = D.schedule.filter((g) => g.date === date);
   const [label, sub] = dayLabel(date);
   $("slateTitle").textContent = label === "Today" ? "Today's games" : `Games · ${label}${sub ? " " + sub : ""}`;
-  $("slateNote").textContent = `Predicted with ratings through ${D.asOf}${D.preseason ? " (preseason)" : ""}, projected starting goalies, each team's real days of rest, and the latest injury report (injured and suspended players are out). Tap a game to change goalies, rest or players who are out.`;
+  $("slateNote").textContent = `Predicted with ratings through ${D.asOf}${D.preseason ? " (preseason)" : ""}, projected starting goalies, each team's real days of rest, and ${D.injuryReport && D.injuryReport.ok ? "the latest injury report (injured and suspended players are out)" : "no injury report (it could not be loaded today, so mark injured players yourself)"}. Tap a game to change goalies, rest or players who are out.`;
   const home = css("--home"), away = css("--away");
   $("slate").innerHTML = games.map((g, i) => {
     const r = predict({ home: g.home, away: g.away, homeRest: g.homeRest, awayRest: g.awayRest, homeOut: injuredOut(g.home), awayOut: injuredOut(g.away) });

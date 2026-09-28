@@ -182,14 +182,25 @@ def fetchRosters(teams):
 ESPN_TEAMS = {"TB": "TBL", "NJ": "NJD", "SJ": "SJS", "LA": "LAK", "UTAH": "UTA"}
 # statuses that keep a player out of the lineup (day-to-day players are assumed to play)
 OUT_STATUSES = {"Out", "Injured Reserve", "Suspension", "Long Term Injured Reserve"}
+INJURY_URLS = ["https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries",
+               "https://site.web.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries"]
+BROWSER_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+                   "Accept": "application/json,text/plain,*/*", "Accept-Language": "en-US,en;q=0.9", "Referer": "https://www.espn.com/"}
 def fetchInjuries():
     # current injuries and suspensions from ESPN's public injury feed (unofficial); an empty list if it is unavailable
+    # what happened is saved to injury_status.json so the webpage can say whether injuries were applied
     columns = ["name", "team", "status", "out", "injury", "returnDate", "updated"]
-    try:
-        response = get("https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries")
-        teams = response.json().get("injuries", []) if response.status_code == 200 else []
-    except ValueError:
-        teams = []
+    teams, attempts = [], []
+    for url in INJURY_URLS:
+        try:
+            response = requests.get(url, headers=BROWSER_HEADERS, timeout=30)
+            attempts.append(f"{url.split('/')[2]}: {response.status_code}")
+            if response.status_code == 200:
+                teams = response.json().get("injuries", [])
+                if teams:
+                    break
+        except (requests.RequestException, ValueError) as error:
+            attempts.append(f"{url.split('/')[2]}: {type(error).__name__}")
     rows = []
     for team in teams:
         for item in team.get("injuries", []):
@@ -201,7 +212,10 @@ def fetchInjuries():
                          "returnDate": details.get("returnDate"), "updated": item.get("date")})
     injuries = pd.DataFrame(rows, columns=columns)
     injuries.to_csv(DATA + "injuries.csv", index=False)
-    print("Fetched injuries:", len(injuries), "players,", int(injuries["out"].sum()), "out")
+    status = {"ok": len(injuries) > 0, "players": len(injuries), "attempts": attempts,
+              "fetched": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
+    json.dump(status, open(DATA + "injury_status.json", "w"))
+    print("Fetched injuries:", len(injuries), "players,", int(injuries["out"].sum()), "out |", "; ".join(attempts))
     return injuries
 def downloadAll():
     if not os.path.exists(DATA + "all_teams_raw.csv"):
