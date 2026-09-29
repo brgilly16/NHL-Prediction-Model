@@ -171,8 +171,9 @@ def playerState(skaters, teamGames, season, rosters=None, injuries=None):
             added.append({"playerId": p["playerId"], "name": p["name"], "team": inj["team"], "position": p["position"], "ratingPost": p["ratingPost"]})
         if added:
             current = pd.concat([current[~current["playerId"].isin([a["playerId"] for a in added])], pd.DataFrame(added)], ignore_index=True)
-    # expected role: average ice time over each player's last 20 games (any team); games in his team's last 10 games
-    history = skaters[skaters["season"] >= season - 1].sort_values("date").groupby("playerId").tail(20)
+    # expected role: average ice time over each player's last 20 games (any team) from the last four seasons, so a player
+    # returning from a season-long injury keeps his role; games in his team's last 10 games
+    history = skaters[skaters["season"] >= season - 3].sort_values("date").groupby("playerId").tail(20)
     role = history.groupby("playerId")["icetime"].mean().rename("recentIcetime")
     recentGames = teamGames.sort_values("date").groupby("team").tail(10)
     recent = skaters.merge(recentGames[["gameId", "team"]], on=["gameId", "team"])

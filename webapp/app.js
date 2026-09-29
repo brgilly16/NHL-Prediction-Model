@@ -344,14 +344,16 @@ function setRankView(view) {
 }
 $("segTeams").addEventListener("click", () => setRankView("teams"));
 $("segPlayers").addEventListener("click", () => setRankView("players"));
+// search ignores accents and common spelling variants ("Alexander" finds "Aleksander", "Jiri" finds "Jiří")
+const searchKey = (text) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/ks/g, "x").replace(/[^a-z ]/g, "");
 function renderPlayers() {
-  const team = $("playerTeam").value, query = $("playerSearch").value.trim().toLowerCase();
+  const team = $("playerTeam").value, query = searchKey($("playerSearch").value.trim());
   let players = Object.entries(D.players).flatMap(([code, list]) => list.map((p) => ({ ...p, team: code })))
     .sort((a, b) => b.rating - a.rating).map((p, i) => ({ ...p, overall: i + 1 }));
   if (team) players = players.filter((p) => p.team === team);
   if (rankState.pos === "D") players = players.filter((p) => p.position === "D");
   if (rankState.pos === "F") players = players.filter((p) => p.position !== "D");
-  if (query) players = players.filter((p) => p.name.toLowerCase().includes(query));
+  if (query) players = players.filter((p) => searchKey(p.name).includes(query));
   const shown = players.slice(0, rankState.limit);
   const top = Math.max(...Object.values(D.players).flat().map((p) => p.rating));
   const positions = { C: "Center", L: "Left wing", R: "Right wing", D: "Defense" };
