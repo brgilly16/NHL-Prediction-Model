@@ -1,4 +1,5 @@
 import re
+import hashlib
 import unicodedata
 import numpy as np
 import pandas as pd
@@ -157,18 +158,23 @@ def playerState(skaters, teamGames, season, rosters=None, injuries=None):
         # players with no NHL games yet (rookies, signings from other leagues) start at replacement level
         onRoster["ratingPost"] = onRoster["ratingPost"].fillna(0.0)
         current = pd.concat([current, onRoster[["playerId", "name", "team", "position", "ratingPost"]]], ignore_index=True)
-    # players on injured reserve are left off the NHL's current roster, so injured players from the injury report are added back
-    # (with their ratings) to keep them in the depth chart: they show as out and can be put back in on the site
+    # players on injured reserve are left off the NHL's current roster, so skaters from the injury report are added back
+    # (with their ratings, or at replacement level if they have no NHL games) so every listed player shows as out on the site
     if injuries is not None and len(injuries):
         listed = set(zip(current["name"].map(nameKey), current["team"]))
         lastByName = last.reset_index().assign(key=lambda d: d["name"].map(nameKey)).drop_duplicates("key", keep=False).set_index("key")
         added = []
         for _, inj in injuries.iterrows():
             key = nameKey(inj["name"])
-            if (key, inj["team"]) in listed or key not in lastByName.index:
+            if (key, inj["team"]) in listed or inj.get("position") == "G":
                 continue
-            p = lastByName.loc[key]
-            added.append({"playerId": p["playerId"], "name": p["name"], "team": inj["team"], "position": p["position"], "ratingPost": p["ratingPost"]})
+            if key in lastByName.index:
+                p = lastByName.loc[key]
+                added.append({"playerId": p["playerId"], "name": p["name"], "team": inj["team"], "position": p["position"], "ratingPost": p["ratingPost"]})
+            else:
+                # no NHL games: a stand-in id (negative, so it never collides with a real one)
+                added.append({"playerId": -(int(hashlib.md5(key.encode()).hexdigest()[:8], 16) + 1), "name": inj["name"], "team": inj["team"],
+                              "position": inj.get("position") or "C", "ratingPost": 0.0})
         if added:
             current = pd.concat([current[~current["playerId"].isin([a["playerId"] for a in added])], pd.DataFrame(added)], ignore_index=True)
     # expected role: average ice time over each player's last 20 games (any team) from the last four seasons, so a player

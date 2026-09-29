@@ -73,9 +73,12 @@ def exportSite():
     teamRankings = rankings[(rankings["category"] == "teams") & (rankings["season"] == rankings["season"].max())]
     playerRankings = rankings[(rankings["category"] == "players") & (rankings["time"] == "regular")]
     playerRankings = playerRankings[playerRankings["season"] == playerRankings["season"].max()]
-    seasonScore = playerRankings.set_index(["name", "playerTeam"])["score"].to_dict()
+    # rankings.csv drops accented letters ("Stützle" is saved as "Sttzle"), so names are compared with every non-ASCII letter removed
+    ascii = lambda name: re.sub(r"[^a-z]", "", "".join(c for c in str(name) if ord(c) < 128).lower())
+    ranked = playerRankings.assign(key=playerRankings["name"].map(ascii))
+    seasonScore = ranked.set_index(["key", "playerTeam"])["score"].to_dict()
     # players who changed teams are matched on name alone
-    seasonScoreByName = playerRankings.drop_duplicates("name", keep=False).set_index("name")["score"].to_dict()
+    seasonScoreByName = ranked.drop_duplicates("key", keep=False).set_index("key")["score"].to_dict()
     teamRows = []
     for _, t in teams.iterrows():
         record = games[games["team"] == t["team"]]
@@ -92,12 +95,17 @@ def exportSite():
     for team, group in players.groupby("team"):
         # depth order within forwards and defense (the webpage builds the projected lineup from it)
         group = group.sort_values(["group", "depth"])
+        # two players with the same name on one team (e.g. Vancouver's two Elias Petterssons) get their position added,
+        # because the webpage tells players apart by name
+        shared = group["name"].duplicated(keep=False)
+        group = group.assign(name=np.where(shared, group["name"] + " (" + np.where(group["group"] == "D", "D", "F") + ")", group["name"]))
         playerRows[team] = [{"name": p["name"], "position": p["position"], "rating": p["rating"], "typical": bool(p["typicalLineup"]),
                              "group": p["group"], "recentGames": int(p["recentGames"]),
                              "injury": p["injury"] if isinstance(p["injury"], str) else None, "injuryOut": bool(p["injuryOut"]),
                              "injuryType": p["injuryType"] if isinstance(p["injuryType"], str) else None,
                              "returnDate": p["returnDate"] if isinstance(p["returnDate"], str) else None,
-                             "seasonScore": seasonScore.get((p["name"], team), seasonScoreByName.get(p["name"]))}
+                             "seasonScore": seasonScore.get((ascii(re.sub(r" \([DF]\)$", "", p["name"])), team),
+                                                            seasonScoreByName.get(ascii(re.sub(r" \([DF]\)$", "", p["name"]))))}
                             for _, p in group.iterrows()]
     # goalie_state.csv is already ordered with the likely starter first
     goalieRows = {team: group[["goalieId", "name", "starts", "recentStarts", "goalieRating", "injury", "injuryOut"]].to_dict("records")

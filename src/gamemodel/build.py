@@ -1,8 +1,9 @@
+import hashlib
 import numpy as np
 import pandas as pd
 from src.model.calcweights import calcWeightsTeam
 from src.gamemodel.download import downloadAll, loadTeamRaw, loadGoalieGames, currentSeason, fetchRosters, fetchInjuries, DATA
-from src.gamemodel.players import addLineupFeatures, playerState, attachInjuries
+from src.gamemodel.players import addLineupFeatures, playerState, attachInjuries, nameKey
 # builds one row per team per regular season game where every feature only uses information from BEFORE that game
 # also saves each team's and goalie's current state (after their latest game) so upcoming games can be predicted
 CODE_MAP = {"L.A": "LAK", "N.J": "NJD", "S.J": "SJS", "T.B": "TBL"}
@@ -254,6 +255,15 @@ def saveCurrentState(df, finalPower, elo, goalies, goalieNow, leagueNow, rosters
         goalieRoster = rosters[rosters["position"] == "G"][["playerId", "name", "team"]]
         roster = roster[~roster["team"].isin(goalieRoster["team"].unique()) & ~roster["playerId"].isin(goalieRoster["playerId"])]
         roster = pd.concat([roster, goalieRoster], ignore_index=True)
+    # goalies on injured reserve are left off the NHL's current roster, so injured goalies from the injury report are added back
+    if injuries is not None and len(injuries):
+        listed = set(zip(roster["name"].map(nameKey), roster["team"]))
+        known = goalies.sort_values("gameDate").assign(key=lambda d: d["name"].map(nameKey)).drop_duplicates("key", keep="last").set_index("key")["playerId"]
+        added = [{"playerId": known.get(nameKey(inj["name"]), -(int(hashlib.md5(nameKey(inj["name"]).encode()).hexdigest()[:8], 16) + 1)),
+                  "name": inj["name"], "team": inj["team"]}
+                 for _, inj in injuries[injuries["position"] == "G"].iterrows() if (nameKey(inj["name"]), inj["team"]) not in listed]
+        if added:
+            roster = pd.concat([roster[~roster["playerId"].isin([a["playerId"] for a in added])], pd.DataFrame(added)], ignore_index=True)
     roster = roster.rename(columns={"playerId": "goalieId"})
     roster["goalieId"] = roster["goalieId"].astype(float)
     # starts with this team (its last 82 and last 10 games) and each goalie's own starts over the last two seasons on any team

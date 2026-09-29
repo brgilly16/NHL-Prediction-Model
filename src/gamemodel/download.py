@@ -189,7 +189,7 @@ BROWSER_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Appl
 def fetchInjuries():
     # current injuries and suspensions from ESPN's public injury feed (unofficial); an empty list if it is unavailable
     # what happened is saved to injury_status.json so the webpage can say whether injuries were applied
-    columns = ["name", "team", "status", "out", "injury", "returnDate", "updated"]
+    columns = ["name", "team", "status", "position", "out", "injury", "returnDate", "updated"]
     teams, attempts = [], []
     for url in INJURY_URLS:
         try:
@@ -207,7 +207,9 @@ def fetchInjuries():
             athlete = item.get("athlete", {})
             details = item.get("details", {}) or {}
             abbrev = athlete.get("team", {}).get("abbreviation", "")
+            position = athlete.get("position", {}).get("abbreviation", "")
             rows.append({"name": athlete.get("displayName"), "team": ESPN_TEAMS.get(abbrev, abbrev), "status": item.get("status"),
+                         "position": {"LW": "L", "RW": "R"}.get(position, position),
                          "out": item.get("status") in OUT_STATUSES, "injury": details.get("type"),
                          "returnDate": details.get("returnDate"), "updated": item.get("date")})
     injuries = pd.DataFrame(rows, columns=columns)
