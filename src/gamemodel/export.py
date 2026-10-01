@@ -5,7 +5,9 @@ import time as clock
 import pickle
 import numpy as np
 import pandas as pd
-from src.gamemodel.download import DATA, get
+import hashlib
+from src.gamemodel.download import DATA, get, fetchStarters
+from src.gamemodel.players import nameKey
 from src.gamemodel.train import GameModel
 from src.gamemodel.build import TIME_ZONES
 # writes webapp/data.js: the trained model's weights plus every team's, goalie's and player's current state
@@ -53,6 +55,28 @@ def fetchSchedule(features):
             g[side + "Rest"] = int(min(max(days, 1), 4))
             previous[team] = g["date"]
     print("Scheduled games:", len(games))
+    return games
+def attachStarters(games, goalieRows, goalieState):
+    # each scheduled game gets ESPN's starting goalies (Confirmed / Expected); a starter missing from his team's goalie list
+    # (just traded or called up) is added to it, with his rating if he has NHL games
+    starters = fetchStarters(sorted({g["date"] for g in games}))
+    everyone = {nameKey(r["name"]): r for r in goalieState.to_dict("records")}
+    for g in games:
+        found = starters.get((g["date"], g["home"], g["away"]), {})
+        for side in ("home", "away"):
+            name, status = found.get(side, (None, None))
+            g[side + "Goalie"], g[side + "GoalieStatus"] = None, "Projected"
+            if not name:
+                continue
+            team = goalieRows.setdefault(g[side], [])
+            match = next((x for x in team if nameKey(x["name"]) == nameKey(name)), None)
+            if match is None:
+                known = everyone.get(nameKey(name))
+                match = {"goalieId": known["goalieId"] if known else -(int(hashlib.md5(nameKey(name).encode()).hexdigest()[:8], 16) + 1),
+                         "name": name, "starts": 0, "recentStarts": 0,
+                         "goalieRating": known["goalieRating"] if known else 0.0, "injury": None, "injuryOut": False}
+                team.append(match)
+            g[side + "Goalie"], g[side + "GoalieStatus"] = match["goalieId"], status or "Expected"
     return games
 def exportSite():
     with open(DATA + "game_model.pkl", "rb") as f:
@@ -110,6 +134,7 @@ def exportSite():
     # goalie_state.csv is already ordered with the likely starter first
     goalieRows = {team: group[["goalieId", "name", "starts", "recentStarts", "goalieRating", "injury", "injuryOut"]].to_dict("records")
                   for team, group in goalies.groupby("team", sort=False)}
+    schedule = attachStarters(fetchSchedule(features), goalieRows, goalies)
     trends, recent = {}, {}
     for team, group in games.sort_values("date").groupby("team"):
         trends[team] = [[d.strftime("%Y-%m-%d"), p, e] for d, p, e in zip(group["date"], group["powerRaw"], group["elo"])]
@@ -131,7 +156,7 @@ def exportSite():
         "teams": teamRows, "goalies": goalieRows, "players": playerRows, "trends": trends, "recent": recent,
         "report": report,
         "backtest": backtest[["date", "home", "away", "homeGoals", "awayGoals", "homeRate", "awayRate", "pWin"]].values.tolist(),
-        "schedule": fetchSchedule(features),
+        "schedule": schedule,
         "injuryReport": json.load(open(DATA + "injury_status.json")) if os.path.exists(DATA + "injury_status.json") else {"ok": False}
     }
     with open(OUTPUT, "w", encoding="utf-8") as f:

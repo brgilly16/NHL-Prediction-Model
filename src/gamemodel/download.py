@@ -219,6 +219,35 @@ def fetchInjuries():
     json.dump(status, open(DATA + "injury_status.json", "w"))
     print("Fetched injuries:", len(injuries), "players,", int(injuries["out"].sum()), "out |", "; ".join(attempts))
     return injuries
+def fetchStarters(dates):
+    # starting goalies from ESPN's scoreboard (unofficial): "Expected" a few days ahead, "Confirmed" on game day
+    # returns {(date, home, away): {"home": (name, status), "away": (name, status)}}; empty for any date that cannot be loaded
+    starters = {}
+    for date in dates:
+        events = []
+        for host in ("site.web.api.espn.com", "site.api.espn.com"):
+            try:
+                response = requests.get(f"https://{host}/apis/site/v2/sports/hockey/nhl/scoreboard?dates={date.replace('-', '')}",
+                                        headers=BROWSER_HEADERS, timeout=30)
+                if response.status_code == 200:
+                    events = response.json().get("events", [])
+                    break
+            except (requests.RequestException, ValueError):
+                continue
+        for event in events:
+            sides = {}
+            for team in event["competitions"][0]["competitors"]:
+                abbrev = team["team"]["abbreviation"]
+                probable = next((p for p in team.get("probables", []) if p.get("name") == "probableStartingGoalie"), None)
+                status = probable.get("status") if probable else None
+                sides[team.get("homeAway")] = (ESPN_TEAMS.get(abbrev, abbrev),
+                                               probable["athlete"]["displayName"] if probable else None,
+                                               status.get("name") if isinstance(status, dict) else status)
+            if "home" in sides and "away" in sides:
+                starters[(date, sides["home"][0], sides["away"][0])] = {"home": sides["home"][1:], "away": sides["away"][1:]}
+        time.sleep(0.2)
+    print("Fetched starting goalies for", sum(1 for s in starters.values() for side in s.values() if side[0]), "team-games")
+    return starters
 def downloadAll():
     if not os.path.exists(DATA + "all_teams_raw.csv"):
         downloadAllTeams()

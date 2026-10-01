@@ -264,7 +264,10 @@ function renderSlate(date) {
   $("slateNote").textContent = `Predicted with ratings through ${D.asOf}${D.preseason ? " (preseason)" : ""}, projected starting goalies, each team's real days of rest, and ${D.injuryReport && D.injuryReport.ok ? "the latest injury report (injured and suspended players are out)" : "no injury report (it could not be loaded today, so mark injured players yourself)"}. Tap a game to change goalies, rest or players who are out.`;
   const home = css("--home"), away = css("--away");
   $("slate").innerHTML = games.map((g, i) => {
-    const r = predict({ home: g.home, away: g.away, homeRest: g.homeRest, awayRest: g.awayRest, homeOut: injuredOut(g.home), awayOut: injuredOut(g.away) });
+    const r = predict({ home: g.home, away: g.away, homeGoalie: g.homeGoalie, awayGoalie: g.awayGoalie,
+      homeRest: g.homeRest, awayRest: g.awayRest, homeOut: injuredOut(g.home), awayOut: injuredOut(g.away) });
+    // starting goalies: Confirmed / Expected from ESPN, otherwise the model's own projection
+    const starter = (name, status) => `${esc(name)} <em class="gs ${(status || "Projected").toLowerCase()}">${status || "Projected"}</em>`;
     const tier = tierOf(r.homeWin), level = TIERS.findIndex(([n]) => n === tier);
     const start = new Date(g.start);
     const time = Date.now() > start ? "Started" : start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -280,16 +283,18 @@ function renderSlate(date) {
       ${line(g.away, r.awayWin, away, r.awayWin > r.homeWin)}
       ${line(g.home, r.homeWin, home, r.homeWin >= r.awayWin)}
       <div class="foot"><span>Expected ${g.away} ${r.awayRate.toFixed(1)} – ${r.homeRate.toFixed(1)} ${g.home}</span>
-      <span>${esc(r.awayGoalie)} vs ${esc(r.homeGoalie)}</span>${notes ? `<span>${notes}</span>` : ""}${injuries ? `<span class="outs">${esc(injuries)}</span>` : ""}</div>
+      <span>${starter(r.awayGoalie, g.awayGoalieStatus)} vs ${starter(r.homeGoalie, g.homeGoalieStatus)}</span>${notes ? `<span>${notes}</span>` : ""}${injuries ? `<span class="outs">${esc(injuries)}</span>` : ""}</div>
     </button>`;
   }).join("");
   $("slate").querySelectorAll(".game").forEach((card) => card.addEventListener("click", () => loadGame(games[card.dataset.i])));
 }
 function loadGame(g) {
-  // put a scheduled game into the custom predictor with its real rest days
+  // put a scheduled game into the custom predictor with its real rest days and its starting goalies
   $("home").value = g.home; $("away").value = g.away;
   fillSide("home"); fillSide("away");
   $("homeRest").value = String(g.homeRest); $("awayRest").value = String(g.awayRest);
+  if (g.homeGoalie) $("homeGoalie").value = String(g.homeGoalie);
+  if (g.awayGoalie) $("awayGoalie").value = String(g.awayGoalie);
   runPrediction();
   $("customTitle").scrollIntoView({ behavior: "smooth", block: "start" });
 }
