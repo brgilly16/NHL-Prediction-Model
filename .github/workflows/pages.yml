@@ -1,5 +1,6 @@
-# keeps the NHL PowerScore site current: every morning it pulls new games from MoneyPuck, rebuilds the features,
-# refits the model and deploys the webapp folder to GitHub Pages. It also runs on every push and on demand.
+# keeps the NHL PowerScore site current: it pulls new games from MoneyPuck, rosters, injuries and starting goalies,
+# rebuilds the features, refits the model, logs this season's pregame predictions and deploys the webapp folder to GitHub Pages.
+# It runs every morning, every hour through game time, on every push and on demand.
 name: Deploy site
 on:
   push:
@@ -7,14 +8,14 @@ on:
   schedule:
     # 11:00 UTC = 7 AM Eastern (6 AM in winter), after the previous night's games are posted
     - cron: "0 11 * * *"
-    # extra runs as starting goalies get confirmed and injuries change during game days:
-    # 16:00, 19:30 and 22:00 UTC = noon, 3:30 PM and 6 PM Eastern (an hour earlier in winter)
-    - cron: "0 16 * * *"
-    - cron: "30 19 * * *"
-    - cron: "0 22 * * *"
+    # hourly from noon to midnight Eastern, so starting goalie confirmations and late injury news are picked up
+    # (GitHub may start scheduled runs late when it is busy; the webpage also checks ESPN live for starters and scores)
+    - cron: "0 16-23 * * *"
+    - cron: "0 0-4 * * *"
   workflow_dispatch:
 permissions:
-  contents: read
+  # contents: write lets the run save this season's prediction log back to the repo
+  contents: write
   pages: write
   id-token: write
 concurrency:
@@ -30,6 +31,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -50,6 +53,17 @@ jobs:
         env:
           # show progress lines as they happen instead of all at the end
           PYTHONUNBUFFERED: "1"
+      # the season log (pregame predictions frozen at puck drop, and results) is kept in the repo so it builds up all season
+      - name: Save the season prediction log
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data/gamemodel/season_predictions.csv
+          if ! git diff --cached --quiet; then
+            git commit -m "Update season prediction log"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

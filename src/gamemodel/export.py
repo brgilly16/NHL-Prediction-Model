@@ -8,6 +8,7 @@ import pandas as pd
 import hashlib
 from src.gamemodel.download import DATA, get, fetchStarters
 from src.gamemodel.players import nameKey
+from src.gamemodel.season import updateSeasonLog
 from src.gamemodel.train import GameModel
 from src.gamemodel.build import TIME_ZONES
 # writes webapp/data.js: the trained model's weights plus every team's, goalie's and player's current state
@@ -135,6 +136,9 @@ def exportSite():
     goalieRows = {team: group[["goalieId", "name", "starts", "recentStarts", "goalieRating", "injury", "injuryOut"]].to_dict("records")
                   for team, group in goalies.groupby("team", sort=False)}
     schedule = attachStarters(fetchSchedule(features), goalieRows, goalies)
+    # the season's live track record (pregame predictions frozen at puck drop, plus final scores)
+    goalieNames = {(team, g["goalieId"]): g["name"] for team, rows in goalieRows.items() for g in rows}
+    seasonLog = updateSeasonLog(schedule, goalieNames, season)
     trends, recent = {}, {}
     for team, group in games.sort_values("date").groupby("team"):
         trends[team] = [[d.strftime("%Y-%m-%d"), p, e] for d, p, e in zip(group["date"], group["powerRaw"], group["elo"])]
@@ -157,6 +161,8 @@ def exportSite():
         "report": report,
         "backtest": backtest[["date", "home", "away", "homeGoals", "awayGoals", "homeRate", "awayRate", "pWin"]].values.tolist(),
         "schedule": schedule,
+        "seasonLog": seasonLog[["gameId", "date", "start", "home", "away", "homeGoalie", "homeGoalieStatus", "awayGoalie", "awayGoalieStatus",
+                                "pHome", "homeRate", "awayRate", "predictedAt", "source", "homeScore", "awayScore", "decidedBy"]].to_dict("records"),
         "injuryReport": json.load(open(DATA + "injury_status.json")) if os.path.exists(DATA + "injury_status.json") else {"ok": False}
     }
     with open(OUTPUT, "w", encoding="utf-8") as f:

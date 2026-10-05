@@ -142,6 +142,7 @@ function showTab(name) {
   if (name === "teams" && !charts.trend) renderTeam();
   if (name === "model" && !charts.calib) renderModel();
   if (name === "backtest" && !$("btTable").innerHTML) renderBacktest();
+  if (name === "season" && !charts.season) renderSeason();
   try { history.replaceState(null, "", "#" + name); } catch (e) {}
 }
 tabs.forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
@@ -263,14 +264,28 @@ function renderSlate(date) {
   $("slateTitle").textContent = label === "Today" ? "Today's games" : `Games · ${label}${sub ? " " + sub : ""}`;
   $("slateNote").textContent = `Predicted with ratings through ${D.asOf}${D.preseason ? " (preseason)" : ""}, projected starting goalies, each team's real days of rest, and ${D.injuryReport && D.injuryReport.ok ? "the latest injury report (injured and suspended players are out)" : "no injury report (it could not be loaded today, so mark injured players yourself)"}. Tap a game to change goalies, rest or players who are out.`;
   const home = css("--home"), away = css("--away");
+  slateDate = date;
   $("slate").innerHTML = games.map((g, i) => {
-    const r = predict({ home: g.home, away: g.away, homeGoalie: g.homeGoalie, awayGoalie: g.awayGoalie,
+    let r = predict({ home: g.home, away: g.away, homeGoalie: g.homeGoalie, awayGoalie: g.awayGoalie,
       homeRest: g.homeRest, awayRest: g.awayRest, homeOut: injuredOut(g.home), awayOut: injuredOut(g.away) });
+    // once a game has started, the card shows the prediction the site logged before puck drop
+    const logged = seasonLogById[g.id];
+    if (logged && Date.now() > new Date(g.start) && logged.pHome !== null) {
+      r = { ...r, homeWin: logged.pHome, awayWin: 1 - logged.pHome, homeRate: logged.homeRate, awayRate: logged.awayRate,
+            homeGoalie: logged.homeGoalie || r.homeGoalie, awayGoalie: logged.awayGoalie || r.awayGoalie };
+    }
     // starting goalies: Confirmed / Expected from ESPN, otherwise the model's own projection
     const starter = (name, status) => `${esc(name)} <em class="gs ${(status || "Projected").toLowerCase()}">${status || "Projected"}</em>`;
     const tier = tierOf(r.homeWin), level = TIERS.findIndex(([n]) => n === tier);
     const start = new Date(g.start);
-    const time = Date.now() > start ? "Started" : start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    // live status and score from ESPN when available
+    const live = g.live;
+    let time = Date.now() > start ? "Started" : start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    if (live && live.state === "in") time = `<b class="live">Live · ${esc(live.detail)}</b> · ${g.away} ${live.awayScore}–${live.homeScore} ${g.home}`;
+    if (live && live.state === "post") {
+      const right = (live.homeScore > live.awayScore) === (r.homeWin >= 0.5);
+      time = `<b>${esc(live.detail)}</b> · ${g.away} ${live.awayScore}–${live.homeScore} ${g.home} <span class="pill ${right ? "good" : "bad"}">${right ? "✓" : "✗"}</span>`;
+    }
     const rest = (team, days) => (days === 1 ? `${team} on a back-to-back` : "");
     const notes = [rest(g.away, g.awayRest), rest(g.home, g.homeRest)].filter(Boolean).join(" · ");
     // regulars (projected lineup) who are out, best players first
@@ -288,6 +303,52 @@ function renderSlate(date) {
   }).join("");
   $("slate").querySelectorAll(".game").forEach((card) => card.addEventListener("click", () => loadGame(games[card.dataset.i])));
 }
+// ---------- live data from ESPN (starting goalies, scores), refreshed while the page is open ----------
+const ESPN_TEAMS = { TB: "TBL", NJ: "NJD", SJ: "SJS", LA: "LAK", UTAH: "UTA" };
+const nameKey = (text) => String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z]/g, "");
+let slateDate = null;
+function findGoalie(team, name) {
+  // the starter on his team's list, or on any team's list (just traded / called up), or a new entry rated average
+  const list = D.goalies[team] = D.goalies[team] || [];
+  let goalie = list.find((g) => nameKey(g.name) === nameKey(name));
+  if (!goalie) {
+    const other = Object.values(D.goalies).flat().find((g) => nameKey(g.name) === nameKey(name));
+    goalie = { ...(other || { goalieId: -Math.abs([...nameKey(name)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7)), goalieRating: 0 }), name, starts: 0, recentStarts: 0, injury: null, injuryOut: false };
+    list.push(goalie);
+  }
+  return goalie;
+}
+async function refreshLive() {
+  const dates = [...new Set(D.schedule.map((g) => g.date))].filter((d) => d >= localDay(new Date(Date.now() - 864e5))).slice(0, 3);
+  let changed = false;
+  for (const date of dates) {
+    let events = [];
+    try {
+      const response = await fetch(`https://site.web.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=${date.replaceAll("-", "")}`);
+      events = (await response.json()).events || [];
+    } catch (e) { continue; }
+    for (const ev of events) {
+      const comp = ev.competitions[0], side = {};
+      for (const t of comp.competitors) side[t.homeAway] = t;
+      const code = (t) => ESPN_TEAMS[t.team.abbreviation] || t.team.abbreviation;
+      const g = D.schedule.find((x) => x.date === date && x.home === code(side.home) && x.away === code(side.away));
+      if (!g) continue;
+      for (const s of ["home", "away"]) {
+        const probable = (side[s].probables || []).find((p) => p.name === "probableStartingGoalie");
+        if (probable && probable.athlete) {
+          const goalie = findGoalie(g[s], probable.athlete.displayName);
+          const status = (probable.status && probable.status.name) || "Expected";
+          if (g[s + "Goalie"] !== goalie.goalieId || g[s + "GoalieStatus"] !== status) { g[s + "Goalie"] = goalie.goalieId; g[s + "GoalieStatus"] = status; changed = true; }
+        }
+      }
+      const type = ev.status.type;
+      const live = { state: type.state, detail: type.shortDetail, homeScore: Number(side.home.score || 0), awayScore: Number(side.away.score || 0) };
+      if (JSON.stringify(live) !== JSON.stringify(g.live)) { g.live = live; changed = true; }
+    }
+  }
+  if (changed && slateDate) renderSlate(slateDate);
+}
+
 function loadGame(g) {
   // put a scheduled game into the custom predictor with its real rest days and its starting goalies
   $("home").value = g.home; $("away").value = g.away;
@@ -506,6 +567,90 @@ function renderModel() {
   $("howList").innerHTML = how.map(([k, v]) => `<li><b>${k}:</b> ${v}</li>`).join("");
 }
 
+// ---------- this season's live track record ----------
+function seasonGames() {
+  // games with a final score; result 1 = home win, 0 = away win; shootouts are kept but count as a coin flip like the backtest
+  return (D.seasonLog || []).filter((g) => g.homeScore !== null && g.homeScore !== undefined && g.pHome !== null)
+    .map((g) => ({ ...g, homeWon: g.homeScore > g.awayScore, shootout: g.decidedBy === "SO", tier: tierOf(g.pHome),
+                   right: (g.pHome >= 0.5) === (g.homeScore > g.awayScore) }));
+}
+function seasonStats(games) {
+  const decided = games.filter((g) => !g.shootout);
+  const correct = decided.filter((g) => g.right).length;
+  const y = (g) => (g.shootout ? 0.5 : g.homeWon ? 1 : 0);
+  const clip = (p) => Math.min(1 - 1e-6, Math.max(1e-6, p));
+  const logLoss = games.length ? -games.reduce((s, g) => s + y(g) * Math.log(clip(g.pHome)) + (1 - y(g)) * Math.log(1 - clip(g.pHome)), 0) / games.length : null;
+  return { games: games.length, decided: decided.length, correct, accuracy: decided.length ? correct / decided.length : null, logLoss };
+}
+function renderSeason() {
+  const label = seasonLabel(D.season);
+  const games = seasonGames();
+  const all = seasonStats(games), live = seasonStats(games.filter((g) => g.source === "live"));
+  const best = D.report.candidates.find((c) => JSON.stringify(c.params) === JSON.stringify(D.report.best));
+  const strong = seasonStats(games.filter((g) => g.tier === "Strong"));
+  const pending = (D.seasonLog || []).filter((g) => g.homeScore === null || g.homeScore === undefined).length;
+  $("seasonTitle").textContent = `${label} season`;
+  $("seasonNote").textContent = `Every game's prediction is logged before puck drop and frozen when the game starts, then checked against the final score. ` +
+    `Games played before logging began (labeled "reconstructed") were predicted by the model as it stood before the season, trained only on earlier seasons. ` +
+    `Shootouts count as a coin flip. ${pending} upcoming games are logged and waiting for results.`;
+  const vs = (value, base, digits, lowerBetter) => {
+    if (value === null || base === undefined) return "";
+    const better = lowerBetter ? value < base : value > base;
+    return `<span class="pill ${better ? "good" : "flat"}" style="margin-left:6px">backtest ${lowerBetter ? base.toFixed(digits) : pct(base, 1)}</span>`;
+  };
+  $("seasonTiles").innerHTML = [
+    ["Record (favorite won)", all.decided ? `${all.correct}–${all.decided - all.correct}` : "–", `${all.games} games${all.games - all.decided ? `, ${all.games - all.decided} shootouts` : ""}`],
+    ["Accuracy", all.accuracy !== null ? pct(all.accuracy, 1) : "–", vs(all.accuracy, best && best.accuracy, 1)],
+    ["Log loss", all.logLoss !== null ? all.logLoss.toFixed(4) : "–", vs(all.logLoss, best && best.logLoss, 4, true)],
+    ["Strong picks", strong.accuracy !== null ? pct(strong.accuracy, 1) : "–", strong.decided ? `${strong.correct} of ${strong.decided}` : "none yet"],
+    ["Live-logged only", live.accuracy !== null ? pct(live.accuracy, 1) : "–", live.decided ? `${live.correct} of ${live.decided}` : "no finished live games yet"]
+  ].map(([k, v, sub]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="note" style="margin:4px 0 0">${sub}</div></div>`).join("");
+  // tiers
+  table($("seasonTierTable"), [
+    { label: "Tier", value: (t) => `<span class="tag t${TIERS.findIndex(([n]) => n === t.tier)}">${t.tier}</span>` },
+    { label: "Games", num: true, value: (t) => t.s.decided },
+    { label: "This season", num: true, value: (t) => (t.s.accuracy !== null ? `<b>${pct(t.s.accuracy, 1)}</b>` : "–") },
+    { label: "Backtest", num: true, value: (t) => { const b = tierStats(t.tier); return b ? pct(b.all.accuracy, 1) : "–"; } }
+  ], TIERS.slice().reverse().map(([tier]) => ({ tier, s: seasonStats(games.filter((g) => g.tier === tier)) })));
+  // accuracy over time
+  const decided = games.filter((g) => !g.shootout);
+  let correct = 0;
+  const points = decided.map((g, i) => { correct += g.right ? 1 : 0; return { x: i + 1, y: correct / (i + 1), date: g.date }; });
+  chartTheme();
+  charts.season?.destroy();
+  charts.season = new Chart($("seasonChart"), {
+    type: "line",
+    data: { datasets: [
+      { label: "This season", data: points, borderColor: css("--home"), borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, tension: 0.2 },
+      { label: "Backtest average", data: points.length ? [{ x: 1, y: best.accuracy }, { x: points.length, y: best.accuracy }] : [], borderColor: css("--muted"), borderDash: [4, 4], borderWidth: 1, pointRadius: 0 }
+    ] },
+    options: {
+      maintainAspectRatio: false, parsing: false, interaction: { mode: "nearest", intersect: false },
+      plugins: { legend: { position: "bottom" }, tooltip: { filter: (c) => c.datasetIndex === 0, callbacks: { title: (c) => `Game ${c[0].raw.x} · ${c[0].raw.date}`, label: (c) => `Accuracy so far ${pct(c.raw.y, 1)}` } } },
+      scales: { x: { type: "linear", min: 1, title: { display: true, text: "Games decided before a shootout" }, ticks: { precision: 0 } },
+                y: { min: 0.3, max: 0.9, ticks: { callback: (v) => pct(v) } } }
+    }
+  });
+  renderSeasonTable();
+}
+function renderSeasonTable() {
+  const team = $("seasonTeam").value;
+  const rows = seasonGames().filter((g) => !team || g.home === team || g.away === team).reverse();
+  table($("seasonTable"), [
+    { label: "Date", value: (g) => g.date },
+    { label: "Game", value: (g) => `${g.away} @ ${g.home}` },
+    { label: "Goalies", value: (g) => `<span style="font-size:12.5px">${esc(g.awayGoalie || "–")} / ${esc(g.homeGoalie || "–")}</span>` },
+    { label: "Home win %", num: true, value: (g) => pct(g.pHome) },
+    { label: "Tier", value: (g) => `<span class="tag t${TIERS.findIndex(([n]) => n === g.tier)}" style="font-size:11px;padding:3px 6px">${g.tier}</span>` },
+    { label: "Pick", value: (g) => (g.pHome >= 0.5 ? g.home : g.away) },
+    { label: "Final", num: true, value: (g) => `${g.awayScore}–${g.homeScore}${g.decidedBy && g.decidedBy !== "REG" ? " " + g.decidedBy : ""}` },
+    { label: "", value: (g) => (g.shootout ? '<span class="pill flat">SO</span>' : g.right ? '<span class="pill good">✓</span>' : '<span class="pill bad">✗</span>') },
+    { label: "Logged", value: (g) => `<span class="pill ${g.source === "live" ? "good" : "flat"}" title="${g.source === "live" ? "Logged before puck drop at " + esc(g.predictedAt) : "Predicted by the pre-season model"}">${g.source === "live" ? "Live" : "Reconstructed"}</span>` }
+  ], rows);
+  if (!rows.length) $("seasonTable").innerHTML = `<tbody><tr><td class="note">No finished games yet.</td></tr></tbody>`;
+}
+$("seasonTeam").addEventListener("change", renderSeasonTable);
+
 // ---------- backtest ----------
 function renderBacktest() {
   const team = $("btTeam").value, tierFilter = $("btTier").value;
@@ -541,12 +686,17 @@ $("away").innerHTML = teamOptions(byPower[1].team);
 $("teamSelect").innerHTML = teamOptions(byPower[0].team);
 $("playerTeam").innerHTML += teamOptions(null);
 $("btTeam").innerHTML += teamOptions(null);
+$("seasonTeam").innerHTML += teamOptions(null);
+$("seasonTabButton").textContent = `${seasonLabel(D.season)} season`;
 for (const side of ["home", "away"]) {
   fillSide(side);
   $(side).addEventListener("change", () => { fillSide(side); runPrediction(); });
   for (const id of [side + "Goalie", side + "Rest"]) $(id).addEventListener("change", runPrediction);
 }
 renderRankings();
+const seasonLogById = Object.fromEntries((D.seasonLog || []).map((r) => [r.gameId, r]));
 renderDays();
+refreshLive();
+setInterval(() => { if (!document.hidden) refreshLive(); }, 5 * 60 * 1000);
 runPrediction();
 showTab((location.hash || "#predict").slice(1));

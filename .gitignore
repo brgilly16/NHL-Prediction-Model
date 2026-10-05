@@ -6,6 +6,7 @@
 !data/gar.csv
 !data/rankings.csv
 !data/gamemodel/backtest_latest_season.csv
+!data/gamemodel/season_predictions.csv
 __pycache__/
 *.pyc
 # downloaded MoneyPuck data (re-downloaded by python -m src.gamemodel.run, cached between GitHub Action runs)

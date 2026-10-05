@@ -49,7 +49,12 @@ class Predictor:
     def teamRow(self, team, opponent, home, goalieId, rest, out):
         state = self.teams.loc[team]
         goalies = self.teamGoalies(team)
-        goalie = next((g for g in goalies if g["goalieId"] == goalieId), goalies[0] if goalies else None)
+        goalie = next((g for g in goalies if g["goalieId"] == goalieId), None)
+        if goalie is None and goalieId is not None:
+            # a starter not on the team's list (just traded or called up): his rating from any team, or average if he has no NHL games
+            anywhere = self.goalies[self.goalies["goalieId"] == goalieId]
+            goalie = anywhere.iloc[0].to_dict() if len(anywhere) else {"name": None, "goalieRating": 0.0}
+        goalie = goalie or (goalies[0] if goalies else None)
         missing, lineupDelta = self.playersOut(team, out)
         # travel: the away team is assumed to come straight from home, starting a road trip
         zones = abs(TIME_ZONES[opponent if not home else team] - TIME_ZONES[team])

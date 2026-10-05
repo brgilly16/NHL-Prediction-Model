@@ -107,6 +107,7 @@ tbody tr:hover { background: var(--surface-2); }
 .chip[aria-pressed="true"] b { color: var(--bad); }
 .chip .inj { font: 700 10px/1 var(--body); font-style: normal; letter-spacing: .04em; text-transform: uppercase; margin-left: 6px; padding: 2px 5px; border-radius: 4px; color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); text-decoration: none; display: inline-block; }
 .game .outs { color: var(--bad); }
+.game .live { color: var(--bad); }
 .gs { font: 600 10px/1 var(--body); font-style: normal; letter-spacing: .04em; text-transform: uppercase; padding: 2px 4px; border-radius: 3px; margin-left: 2px; vertical-align: 1px; }
 .gs.confirmed { color: var(--good); background: color-mix(in srgb, var(--good) 13%, transparent); }
 .gs.expected { color: var(--ink-2); background: color-mix(in srgb, var(--muted) 16%, transparent); }
@@ -199,6 +200,7 @@ svg.spark circle { fill: var(--home); }
       <button role="tab" data-tab="predict" aria-selected="true">Games</button>
       <button role="tab" data-tab="rankings" aria-selected="false">Power rankings</button>
       <button role="tab" data-tab="teams" aria-selected="false">Teams</button>
+      <button role="tab" data-tab="season" aria-selected="false" id="seasonTabButton">This season</button>
       <button role="tab" data-tab="model" aria-selected="false">Model report</button>
       <button role="tab" data-tab="backtest" aria-selected="false" data-backtest-season="{s} backtest">Backtest</button>
     </nav>
@@ -353,6 +355,33 @@ svg.spark circle { fill: var(--home); }
     </div>
   </section>
 
+  <!-- this season's live track record -->
+  <section class="panel" id="season" hidden>
+    <div class="box">
+      <h2 id="seasonTitle">This season</h2>
+      <p class="note" id="seasonNote"></p>
+      <div class="tiles" id="seasonTiles"></div>
+    </div>
+    <div class="split">
+      <div class="box">
+        <h3>Accuracy over the season</h3>
+        <p class="note">Share of games decided before a shootout where the favorite won, game by game. The dashed line is the backtest average.</p>
+        <div class="chart"><canvas id="seasonChart"></canvas></div>
+      </div>
+      <div class="box">
+        <h3>By confidence tier</h3>
+        <p class="note">How each tier is doing this season, next to its backtest accuracy.</p>
+        <div class="scroll"><table id="seasonTierTable"></table></div>
+      </div>
+    </div>
+    <div class="box">
+      <div class="headrow"><h3>Every game</h3>
+        <select id="seasonTeam" aria-label="Filter games by team"><option value="">All teams</option></select>
+      </div>
+      <div class="scroll"><table id="seasonTable"></table></div>
+    </div>
+  </section>
+
   <!-- backtest -->
   <section class="panel" id="backtest" hidden>
     <div class="box">
@@ -371,5 +400,5 @@ svg.spark circle { fill: var(--home); }
 <footer class="wrap foot">Data from <a href="https://moneypuck.com" rel="noopener">MoneyPuck.com</a>. Updated automatically every morning during the season.</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="data.js?v=1790895288" charset="utf-8"></script>
-<script src="app.js?v=1790895288" charset="utf-8"></script>
+<script src="data.js?v=1791170142" charset="utf-8"></script>
+<script src="app.js?v=1791170142" charset="utf-8"></script>
