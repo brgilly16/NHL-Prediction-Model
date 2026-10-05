@@ -100,11 +100,15 @@ tbody tr:hover { background: var(--surface-2); }
 .vs { align-self: center; font: 700 30px/1 var(--display); color: var(--muted); }
 @media (max-width: 760px) { .faceoff { grid-template-columns: 1fr; } .vs { display: none; } }
 .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.roster { display: flex; flex-wrap: wrap; gap: 6px; max-height: 172px; overflow-y: auto; padding: 2px; }
+.roster { display: flex; flex-wrap: wrap; gap: 6px; max-height: 260px; overflow-y: auto; padding: 2px; }
 .chip { font: 500 13px/1.2 var(--body); color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; cursor: pointer; }
 .chip b { font-weight: 600; color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
 .chip[aria-pressed="true"] { background: color-mix(in srgb, var(--bad) 14%, var(--surface)); border-color: var(--bad); color: var(--bad); text-decoration: line-through; }
 .chip[aria-pressed="true"] b { color: var(--bad); }
+.rostergroup { flex-basis: 100%; font: 600 11px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 6px 0 2px; }
+.rostergroup:first-child { margin-top: 0; }
+.chip.depth { opacity: .72; border-style: dashed; }
+.chip.depth[aria-pressed="true"] { opacity: 1; }
 .chip .inj { font: 700 10px/1 var(--body); font-style: normal; letter-spacing: .04em; text-transform: uppercase; margin-left: 6px; padding: 2px 5px; border-radius: 4px; color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); text-decoration: none; display: inline-block; }
 .game .outs { color: var(--bad); }
 .game .live { color: var(--bad); }

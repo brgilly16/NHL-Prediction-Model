@@ -161,14 +161,18 @@ function fillSide(side) {
   $(side + "Goalie").innerHTML = (D.goalies[code] || []).map((g) =>
     `<option value="${g.goalieId}">${esc(g.name)} · ${g.starts} GS · ${signed(g.goalieRating)}${g.injury ? " · " + (STATUS_SHORT[g.injury] || g.injury) : ""}</option>`).join("");
   state[side + "Out"] = injuredOut(code);
-  // the typical lineup plus any injured regular, forwards first, then defense, in depth order
-  const players = (D.players[code] || []).filter((p) => p.typical || (p.injury && p.depth !== undefined && p.recentGames > 0));
-  $(side + "Roster").innerHTML = players.map((p) => {
+  // the whole roster: the projected lineup first (forwards, then defense, in depth order), then the depth players,
+  // who only matter if someone ahead of them is out (the next man up plays)
+  const roster = D.players[code] || [];
+  const chip = (p) => {
     const out = state[side + "Out"].has(p.name);
     const tag = p.injury ? `<i class="inj">${STATUS_SHORT[p.injury] || p.injury}</i>` : "";
-    const title = `Rating ${p.rating.toFixed(1)} GAR per 82 games${p.injury ? " · " + injuryNote(p) : ""}`;
-    return `<button type="button" class="chip" aria-pressed="${out}" data-name="${esc(p.name)}" title="${esc(title)}">${esc(p.name)}<b>${p.rating.toFixed(1)}</b>${tag}</button>`;
-  }).join("");
+    const title = `${p.position} · rating ${p.rating.toFixed(1)} GAR per 82 games${p.injury ? " · " + injuryNote(p) : ""}${p.typical ? "" : " · depth: plays only if someone ahead of him is out"}`;
+    return `<button type="button" class="chip${p.typical ? "" : " depth"}" aria-pressed="${out}" data-name="${esc(p.name)}" title="${esc(title)}">${esc(p.name)}<b>${p.rating.toFixed(1)}</b>${tag}</button>`;
+  };
+  const lineup = roster.filter((p) => p.typical), depth = roster.filter((p) => !p.typical);
+  $(side + "Roster").innerHTML = `<span class="rostergroup">Projected lineup</span>${lineup.map(chip).join("")}` +
+    (depth.length ? `<span class="rostergroup">Depth (${depth.length})</span>${depth.map(chip).join("")}` : "");
   $(side + "Roster").querySelectorAll(".chip").forEach((chip) => chip.addEventListener("click", () => {
     const out = state[side + "Out"], name = chip.dataset.name;
     out.has(name) ? out.delete(name) : out.add(name);
