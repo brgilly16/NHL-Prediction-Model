@@ -125,7 +125,7 @@ def nameKey(name):
 def attachInjuries(players, injuries):
     # adds injury status to players (matched on name and team, or on name alone when it is unique in the league)
     players = players.copy()
-    for column in ["injury", "injuryType", "returnDate"]:
+    for column in ["injury", "injuryType", "returnDate", "injurySource"]:
         players[column] = None
     players["injuryOut"] = False
     if injuries is None or not len(injuries):
@@ -142,7 +142,8 @@ def attachInjuries(players, injuries):
             match = unique.loc[key]
         else:
             continue
-        players.loc[i, ["injury", "injuryType", "returnDate", "injuryOut"]] = [match["status"], match["injury"], match["returnDate"], bool(match["out"])]
+        players.loc[i, ["injury", "injuryType", "returnDate", "injuryOut", "injurySource"]] = [
+            match["status"], match["injury"], match["returnDate"], bool(match["out"]), match.get("source", "ESPN")]
     return players
 def playerState(skaters, teamGames, season, rosters=None, injuries=None):
     # each skater's current rating and each team's projected lineup (12 forwards and 6 defensemen)

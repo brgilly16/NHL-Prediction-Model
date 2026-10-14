@@ -154,7 +154,7 @@ const STATUS_SHORT = { "Injured Reserve": "IR", "Long Term Injured Reserve": "LT
 const injuredOut = (code) => new Set((D.players[code] || []).filter((p) => p.injuryOut).map((p) => p.name));
 function injuryNote(p) {
   const back = p.returnDate ? ` · expected back ${new Date(p.returnDate + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "";
-  return `${p.injury}${p.injuryType ? " (" + p.injuryType + ")" : ""}${back}`;
+  return `${p.injury}${p.injuryType ? " (" + p.injuryType + ")" : ""}${back}${p.injurySource ? " · per " + (p.injurySource === "CBS" ? "CBS Sports" : p.injurySource) : ""}`;
 }
 function fillSide(side) {
   const code = $(side).value;

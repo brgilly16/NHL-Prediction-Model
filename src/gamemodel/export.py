@@ -129,6 +129,7 @@ def exportSite():
                              "injury": p["injury"] if isinstance(p["injury"], str) else None, "injuryOut": bool(p["injuryOut"]),
                              "injuryType": p["injuryType"] if isinstance(p["injuryType"], str) else None,
                              "returnDate": p["returnDate"] if isinstance(p["returnDate"], str) else None,
+                             "injurySource": p["injurySource"] if isinstance(p.get("injurySource"), str) else None,
                              "seasonScore": seasonScore.get((ascii(re.sub(r" \([DF]\)$", "", p["name"])), team),
                                                             seasonScoreByName.get(ascii(re.sub(r" \([DF]\)$", "", p["name"]))))}
                             for _, p in group.iterrows()]

@@ -3,6 +3,7 @@ import re
 import json
 import time
 import datetime
+import unicodedata
 import requests
 import pandas as pd
 from io import StringIO
@@ -212,13 +213,61 @@ def fetchInjuries():
                          "position": {"LW": "L", "RW": "R"}.get(position, position),
                          "out": item.get("status") in OUT_STATUSES, "injury": details.get("type"),
                          "returnDate": details.get("returnDate"), "updated": item.get("date")})
-    injuries = pd.DataFrame(rows, columns=columns)
+    espn = pd.DataFrame(rows, columns=columns).assign(source="ESPN")
+    # CBS Sports' report catches players ESPN has not listed; when both list a player, ESPN's entry is kept
+    cbs = fetchCbsInjuries(columns)
+    attempts.append(f"cbssports.com: {len(cbs)} players")
+    key = lambda df: df["name"].map(lambda n: re.sub(r"[^a-z]", "", unicodedata.normalize("NFKD", str(n)).encode("ascii", "ignore").decode().lower())) + "|" + df["team"]
+    if len(cbs):
+        cbs = cbs[~key(cbs).isin(set(key(espn)))] if len(espn) else cbs
+    injuries = pd.concat([espn, cbs], ignore_index=True)
     injuries.to_csv(DATA + "injuries.csv", index=False)
-    status = {"ok": len(injuries) > 0, "players": len(injuries), "attempts": attempts,
+    status = {"ok": len(injuries) > 0, "players": len(injuries), "espn": len(espn), "cbsOnly": len(cbs), "attempts": attempts,
               "fetched": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
     json.dump(status, open(DATA + "injury_status.json", "w"))
     print("Fetched injuries:", len(injuries), "players,", int(injuries["out"].sum()), "out |", "; ".join(attempts))
     return injuries
+CBS_TEAMS = {"Anaheim": "ANA", "Boston": "BOS", "Buffalo": "BUF", "Calgary": "CGY", "Carolina": "CAR", "Chicago": "CHI", "Colorado": "COL",
+             "Columbus": "CBJ", "Dallas": "DAL", "Detroit": "DET", "Edmonton": "EDM", "Florida": "FLA", "Los Angeles": "LAK", "Minnesota": "MIN",
+             "Montreal": "MTL", "Nashville": "NSH", "New Jersey": "NJD", "N.Y. Islanders": "NYI", "N.Y. Rangers": "NYR", "Ottawa": "OTT",
+             "Philadelphia": "PHI", "Pittsburgh": "PIT", "San Jose": "SJS", "Seattle": "SEA", "St. Louis": "STL", "Tampa Bay": "TBL",
+             "Toronto": "TOR", "Utah": "UTA", "Vancouver": "VAN", "Vegas": "VGK", "Washington": "WSH", "Winnipeg": "WPG"}
+def fetchCbsInjuries(columns):
+    # CBS Sports' NHL injury report (a public web page, one table per team); an empty table if it cannot be read
+    try:
+        response = requests.get("https://www.cbssports.com/nhl/injuries/", headers=BROWSER_HEADERS, timeout=30)
+        page = response.text if response.status_code == 200 else ""
+    except requests.RequestException:
+        page = ""
+    text = lambda html: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html)).strip()
+    today = datetime.date.today()
+    rows = []
+    for part in page.split('class="TeamName"')[1:]:
+        # each table starts with the team's name ("Vegas", "N.Y. Rangers", ...); the longest matching name wins
+        label = text(part[:2000]).lstrip("> ")
+        team = next((CBS_TEAMS[n] for n in sorted(CBS_TEAMS, key=len, reverse=True) if label.startswith(n)), None)
+        if not team:
+            continue
+        for row in re.findall(r'<tr class="TableBase-bodyTr">(.*?)</tr>', part, re.S):
+            cells = re.findall(r'<td class="TableBase-bodyTd[^"]*"[^>]*>(.*?)</td>', row, re.S)
+            name = re.search(r'CellPlayerName--long">.*?<a [^>]*>(.*?)</a>', row, re.S)
+            if len(cells) < 5 or not name:
+                continue
+            position, injury, note = text(cells[1]), text(cells[3]), text(cells[4])
+            lower = note.lower()
+            status = ("Injured Reserve" if note.startswith("IR") else "Suspension" if "suspen" in lower
+                      else "Day-To-Day" if "day-to-day" in lower or "game time" in lower else "Out")
+            # "Expected to be out until at least Nov 2": the year follows the season (Sep-Dec this year, Jan-Aug next year)
+            back = re.search(r"until at least (\w{3}) (\d{1,2})", note)
+            returnDate = None
+            if back:
+                month = datetime.datetime.strptime(back.group(1), "%b").month
+                year = today.year + (1 if month < 9 <= today.month else 0)
+                returnDate = f"{year}-{month:02d}-{int(back.group(2)):02d}"
+            rows.append({"name": text(name.group(1)), "team": team, "status": status,
+                         "position": {"LW": "L", "RW": "R"}.get(position, position), "out": status in OUT_STATUSES,
+                         "injury": injury or None, "returnDate": returnDate, "updated": None})
+    return pd.DataFrame(rows, columns=columns).assign(source="CBS")
 def fetchStarters(dates):
     # starting goalies from ESPN's scoreboard (unofficial): "Expected" a few days ahead, "Confirmed" on game day
     # returns {(date, home, away): {"home": (name, status), "away": (name, status)}}; empty for any date that cannot be loaded
