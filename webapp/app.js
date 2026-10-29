@@ -384,7 +384,7 @@ function renderRankings() {
   table($("teamTable"), [
     { label: "Rank", value: (t, i) => { const d = D.preseason ? 0 : earlier.indexOf(t.team) - i;
       return `<span class="rkn">${i + 1}</span><span class="mv ${d > 0 ? "up" : d < 0 ? "down" : "same"}">${d > 0 ? "▲ " + d : d < 0 ? "▼ " + -d : "–"}</span>`; } },
-    { label: "Team", value: (t) => `<div class="who"><b>${t.team}</b><span>${t.record.join("-")} ${D.preseason ? seasonLabel(D.dataSeason) : "W-L-SO"}</span></div>` },
+    { label: "Team", value: (t) => `<div class="who"><b>${t.team}</b><span>${t.record.join("-")} ${D.preseason ? seasonLabel(D.dataSeason) : (D.recordFormat || "W-L-SO")}</span></div>` },
     { label: "PowerScore", value: (t) => `<div class="score"><strong>${fix(currentPower(t))}</strong><span class="track"><i style="width:${(8 + 92 * (currentPower(t) - min) / (max - min)).toFixed(1)}%"></i></span></div>` },
     { label: "Season trend", value: (t) => sparkline((D.trends[t.team] || []).map((x) => x[1]), 0.3, 0.9) },
     { label: "Elo", num: true, value: (t) => `<span class="stat2">${fix(t.elo, 0)}</span>` },

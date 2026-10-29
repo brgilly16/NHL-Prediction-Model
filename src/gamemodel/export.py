@@ -79,6 +79,20 @@ def attachStarters(games, goalieRows, goalieState):
                 team.append(match)
             g[side + "Goalie"], g[side + "GoalieStatus"] = match["goalieId"], status or "Expected"
     return games
+def teamRecords(log, season):
+    # NHL standings records: [wins, regulation losses, overtime and shootout losses], from the season log's final scores
+    # (the NHL score counts the shootout winner, decidedBy is REG, OT or SO); returns None when the season has no results
+    done = log[(log["season"] == season) & log["homeScore"].notna() & log["awayScore"].notna()].drop_duplicates("gameId")
+    if not len(done):
+        return None
+    records = {}
+    for _, g in done.iterrows():
+        if g["homeScore"] == g["awayScore"]:
+            continue
+        winner, loser = (g["home"], g["away"]) if g["homeScore"] > g["awayScore"] else (g["away"], g["home"])
+        records.setdefault(winner, [0, 0, 0])[0] += 1
+        records.setdefault(loser, [0, 0, 0])[2 if g["decidedBy"] in ("OT", "SO") else 1] += 1
+    return records
 def exportSite():
     with open(DATA + "game_model.pkl", "rb") as f:
         model = pickle.load(f)
@@ -140,6 +154,12 @@ def exportSite():
     # the season's live track record (pregame predictions frozen at puck drop, plus final scores)
     goalieNames = {(team, g["goalieId"]): g["name"] for team, rows in goalieRows.items() for g in rows}
     seasonLog = updateSeasonLog(schedule, goalieNames, season)
+    # standings-style records (W-L-OT/SOL) from the log's final scores, which include shootout winners and how each game ended;
+    # if the log has no results for the season on show (the preseason shows last season), the W-L-SO counts above are kept
+    records = teamRecords(seasonLog, dataSeason)
+    if records:
+        for row in teamRows:
+            row["record"] = records.get(row["team"], [0, 0, 0])
     trends, recent = {}, {}
     for team, group in games.sort_values("date").groupby("team"):
         trends[team] = [[d.strftime("%Y-%m-%d"), p, e] for d, p, e in zip(group["date"], group["powerRaw"], group["elo"])]
@@ -151,6 +171,7 @@ def exportSite():
     winColumns = model.homeFeatures(features.head(2)).columns
     data = {
         "season": season, "dataSeason": dataSeason, "preseason": season > dataSeason,
+        "recordFormat": "W-L-OT/SOL" if records else "W-L-SO",
         "backtestSeason": int(report["bestBySeason"][-1]["season"]),
         "rankingsSeason": int(playerRankings["season"].max()) if len(playerRankings) else None,
         "asOf": str(teams["lastGame"].max())[:10],
